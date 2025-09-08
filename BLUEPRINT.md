@@ -28,12 +28,13 @@ The AI Core will be responsible for:
 
 #### Core Components
 
-The AI Core is built upon a philosophy of harmonious alignment between four key components. For a detailed explanation of this philosophy, see [`ai-core/CORE_PHILOSOPHY.md`](ai-core/CORE_PHILOSOPHY.md).
+The AI Core is built upon a philosophy of harmonious alignment between five key components. For a detailed explanation of this philosophy, see [`ai-core/CORE_PHILOSOPHY.md`](ai-core/CORE_PHILOSOPHY.md).
 
 *   **Blackbox Core:** Handles interactions with opaque, external systems.
-*   **Whitebox Core:** Contains the transparent, internal logic of the AI.
+*   **Whitebox Core:** Contains the transparent, internal logic of the AI. It is responsible for the core cognitive functions of the system, including learning, reasoning, self-correction, and understanding natural language.
 *   **Glassbox Core:** Provides observability and monitoring for the entire system.
 *   **Conscience Module:** Serves as the moral compass, ensuring all actions align with the Sacred Principles.
+*   **Container Core:** Manages and orchestrates containerized AI frameworks for specialized tasks (e.g., NLP, Computer Vision).
 
 ### 2. Kernel
 
