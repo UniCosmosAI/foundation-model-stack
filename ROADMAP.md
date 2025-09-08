@@ -21,7 +21,7 @@ This phase is focused on research, architectural design, and the development of 
 *   **Tasks:**
     *   Develop a prototype of the HTML5-based Web3 OS using Rust.
     *   Develop a proof-of-concept for the Container Core, demonstrating its ability to manage a sample AI model.
-    *   Begin integration of KDE Plasma and GNOME Trixie with a mock AI Core.
+    *   Begin integration of all four supported desktop environments (KDE, GNOME, MATE, XFCE) with a mock AI Core.
     *   Establish the foundational infrastructure for decentralized identity.
 *   **Milestone:** A functional prototype of the Web3 OS that can leverage the Container Core to run a simple AI task.
 
@@ -75,7 +75,7 @@ This phase is focused on polishing the OS, optimizing performance, and preparing
 ### **Q3: Feature Hardening and Optimization**
 *   **Tasks:**
     *   Conduct extensive performance profiling and optimization.
-    *   Finalize the user interface and user experience for both desktop environments.
+    *   Finalize the user interface and user experience for all supported desktop environments.
     *   Perform a full security audit of the entire system.
 *   **Milestone:** A feature-complete and performance-tuned Release Candidate.
 

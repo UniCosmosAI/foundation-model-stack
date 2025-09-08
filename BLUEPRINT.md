@@ -47,12 +47,14 @@ The kernel will be a microkernel based on Debian/GNU, with a focus on stability,
 
 ### 3. Desktop Environments
 
-Unified Cosmic AI will support two of the most popular and advanced desktop environments:
+Unified Cosmic AI will support a wide range of popular desktop environments to provide users with maximum flexibility and choice. The initially supported environments will be:
 
 *   **KDE Plasma:** Known for its modern design, flexibility, and rich feature set.
 *   **GNOME Trixie:** Focused on simplicity, ease of use, and a streamlined user experience.
+*   **MATE:** A traditional, intuitive, and lightweight desktop environment.
+*   **XFCE:** A lightweight and fast desktop environment, designed for performance and low resource usage.
 
-Both desktop environments will be integrated with the AI Core to provide a seamless and intelligent user experience.
+All supported desktop environments will be deeply integrated with the AI Core to provide a seamless and intelligent user experience.
 
 ### 4. Web3 OS
 
