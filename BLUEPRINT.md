@@ -28,13 +28,14 @@ The AI Core will be responsible for:
 
 #### Core Components
 
-The AI Core is built upon a philosophy of harmonious alignment between five key components. For a detailed explanation of this philosophy, and the principles behind each core, see the [**Core Philosophy Document**](ai-core/CORE_PHILOSOPHY.md).
+The AI Core is built upon a philosophy of harmonious alignment between six key components. For a detailed explanation of this philosophy, and the principles behind each core, see the [**Core Philosophy Document**](ai-core/CORE_PHILOSOPHY.md).
 
 *   **[Blackbox Core](ai-core/CORE_PHILOSOPHY.md#1-the-blackbox-core-the-opaque-interface):** Handles interactions with opaque, external systems.
 *   **[Whitebox Core](ai-core/CORE_PHILOSOPHY.md#2-the-whitebox-core-the-transparent-logic):** Contains the transparent, internal logic of the AI. It is responsible for the core cognitive functions of the system, including learning, reasoning, self-correction, and understanding natural language.
 *   **[Glassbox Core](ai-core/CORE_PHILOSOPHY.md#3-the-glassbox-core-the-observability-engine):** Provides observability and monitoring for the entire system.
 *   **[Conscience Module](ai-core/CORE_PHILOSOPHY.md#4-the-conscience-module-the-moral-compass):** Serves as the moral compass, ensuring all actions align with the Sacred Principles.
 *   **[Container Core](ai-core/CORE_PHILOSOPHY.md#5-the-container-core-the-framework-orchestrator):** Manages and orchestrates containerized AI frameworks for specialized tasks. This includes models for NLP and Computer Vision, such as the **Spatial Transformer** module for advanced spatial reasoning.
+*   **[Alignment Core](ai-core/alignment-core/ALIGNMENT_PHILOSOPHY.md):** Ensures the system's architecture and operations adhere to principles of harmony, pattern integrity, and quantum coherence.
 
 ### 2. Kernel
 
