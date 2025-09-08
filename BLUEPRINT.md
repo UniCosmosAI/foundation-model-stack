@@ -26,6 +26,14 @@ The AI Core will be responsible for:
 *   **Personalized User Experience:** Adapting the OS to individual user habits and preferences.
 *   **AI-Powered Features:** Providing features such as natural language processing, predictive text, and intelligent search.
 
+#### Core Components
+
+The AI Core is built upon a philosophy of harmonious alignment between three key components. For a detailed explanation of this philosophy, see [`ai-core/CORE_PHILOSOPHY.md`](ai-core/CORE_PHILOSOPHY.md).
+
+*   **Blackbox Core:** Handles interactions with opaque, external systems.
+*   **Whitebox Core:** Contains the transparent, internal logic of the AI.
+*   **Glassbox Core:** Provides observability and monitoring for the entire system.
+
 ### 2. Kernel
 
 The kernel will be a microkernel based on Debian/GNU, with a focus on stability, security, and performance.
