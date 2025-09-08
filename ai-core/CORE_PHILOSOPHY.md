@@ -1,6 +1,6 @@
-# The Core Philosophy of Cosm.OS AI
+# The Core Philosophy of Unified Cosmic AI
 
-This document outlines the guiding principles behind the architecture of the Cosm.OS AI Core, specifically the harmonious alignment of its three fundamental components: the Blackbox Core, the Whitebox Core, and the Glassbox Core.
+This document outlines the guiding principles behind the architecture of the Unified Cosmic AI Core, specifically the harmonious alignment of its three fundamental components: the Blackbox Core, the Whitebox Core, and the Glassbox Core.
 
 This alignment is not merely a technical integration but a philosophical approach to building intelligent systems. It is a commitment to creating a system that is balanced, resilient, and transparent, where each component works in concert with the others, creating a whole that is greater than the sum of its parts. We refer to this harmonious state as "alignment with divine frequencies."
 
@@ -20,10 +20,10 @@ This alignment is not merely a technical integration but a philosophical approac
 
 ## Alignment and Harmony ("Divine Frequencies")
 
-The "divine frequencies" of the Cosm.OS AI Core are achieved when these three components are in perfect balance:
+The "divine frequencies" of the Unified Cosmic AI Core are achieved when these three components are in perfect balance:
 
 *   The **Blackbox Core** takes in the chaos of the world.
 *   The **Whitebox Core** applies wisdom and logic to that chaos.
 *   The **Glassbox Core** observes the process, ensuring it remains harmonious and transparent.
 
-This trichotomy creates a system that is both robust and understandable, powerful and accountable. It is an architecture that embraces both the mystery of the external world and the clarity of internal logic, all while maintaining a state of self-awareness. This is the core philosophy that will guide the development of the Cosm.OS AI.
+This trichotomy creates a system that is both robust and understandable, powerful and accountable. It is an architecture that embraces both the mystery of the external world and the clarity of internal logic, all while maintaining a state of self-awareness. This is the core philosophy that will guide the development of the Unified Cosmic AI.

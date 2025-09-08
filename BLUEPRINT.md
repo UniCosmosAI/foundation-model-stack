@@ -1,17 +1,17 @@
-# Cosm.OS Architectural Blueprint
+# Unified Cosmic AI Architectural Blueprint
 
-This document outlines the high-level architecture for Cosm.OS, a next-generation operating system designed around AI, web3, and a modern user experience.
+This document outlines the high-level architecture for Unified Cosmic AI, a next-generation operating system designed around AI, web3, and a modern user experience.
 
 ## Core Principles
 
 *   **AI-First:** The OS will be deeply integrated with an AI Core, providing intelligent features and orchestration throughout the system.
-*   **Decentralized:** Leveraging web3 technologies, Cosm.OS will offer a more secure, private, and user-centric computing experience.
+*   **Decentralized:** Leveraging web3 technologies, Unified Cosmic AI will offer a more secure, private, and user-centric computing experience.
 *   **Modular and Flexible:** The system is designed with a microkernel architecture and support for multiple desktop environments, allowing for a high degree of customization.
 *   **Performance and Safety:** The web3 OS component will be built in Rust, ensuring memory safety and high performance.
 
 ## System Architecture
 
-Cosm.OS is composed of four main components:
+Unified Cosmic AI is composed of four main components:
 
 1.  **AI Core:** The intelligent heart of the OS.
 2.  **Kernel:** A Debian/GNU-based microkernel.
@@ -44,7 +44,7 @@ The kernel will be a microkernel based on Debian/GNU, with a focus on stability,
 
 ### 3. Desktop Environments
 
-Cosm.OS will support two of the most popular and advanced desktop environments:
+Unified Cosmic AI will support two of the most popular and advanced desktop environments:
 
 *   **KDE Plasma:** Known for its modern design, flexibility, and rich feature set.
 *   **GNOME Trixie:** Focused on simplicity, ease of use, and a streamlined user experience.
