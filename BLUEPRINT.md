@@ -11,14 +11,33 @@ This document outlines the high-level architecture for Unified Cosmic AI, a next
 
 ## System Architecture
 
-Unified Cosmic AI is composed of four main components, each designed to be modular and work in concert with the others.
+Unified Cosmic AI is composed of five main components, each designed to be modular and work in concert with the others.
 
-1.  **AI Core:** The intelligent heart of the OS, responsible for all high-level cognitive functions.
+1.  **Bootloader:** Responsible for initializing the system and loading the kernel.
 2.  **Kernel:** A stable and secure Debian/GNU-based microkernel that provides the foundational layer for the OS.
-3.  **Desktop Environments:** Support for both KDE Plasma and GNOME Trixie, offering users a choice of modern, intuitive interfaces.
-4.  **Web3 OS:** A novel, HTML5-based operating system written in Rust, providing a secure, decentralized, and user-centric platform.
+3.  **AI Core:** The intelligent heart of the OS, responsible for all high-level cognitive functions.
+4.  **Desktop Environments:** Support for a wide range of popular desktop environments.
+5.  **Web3 OS:** A novel, HTML5-based operating system written in Rust, providing a secure, decentralized, and user-centric platform.
 
-### 1. AI Core
+### 1. Bootloader
+
+The bootloader is responsible for initializing the system hardware and loading the Unified Cosmic AI kernel into memory. To support a wide range of hardware, the project will develop and maintain bootloaders for multiple architectures:
+
+*   **Leviathan (CISC):** For Complex Instruction Set Computing architectures, with specific support for:
+    *   `x86` (32-bit)
+    *   `x86-64` (64-bit)
+*   **Bahamut (RISC):** For Reduced Instruction Set Computing architectures.
+*   **Behemoth (ARM):** For ARM-based architectures.
+
+### 2. Kernel
+
+The kernel will be a microkernel based on Debian/GNU, with a focus on stability, security, and performance.
+
+*   **Architecture:** Microkernel design for modularity and fault isolation.
+*   **Base:** Built upon the solid foundation of Debian/GNU.
+*   **Further Reading:** For more information on kernel development, refer to the official documentation: [Linux Kernel Documentation](https://docs.kernel.org/index.html)
+
+### 3. AI Core
 
 The AI Core will be responsible for:
 
@@ -37,15 +56,7 @@ The AI Core is built upon a philosophy of harmonious alignment between six key c
 *   **[Container Core](ai-core/CORE_PHILOSOPHY.md#5-the-container-core-the-framework-orchestrator):** Manages and orchestrates containerized AI frameworks for specialized tasks. This includes models for NLP and Computer Vision, such as the **Spatial Transformer** module for advanced spatial reasoning.
 *   **[Alignment Core](ai-core/alignment-core/ALIGNMENT_PHILOSOPHY.md):** Ensures the system's architecture and operations adhere to principles of harmony, pattern integrity, and quantum coherence.
 
-### 2. Kernel
-
-The kernel will be a microkernel based on Debian/GNU, with a focus on stability, security, and performance.
-
-*   **Architecture:** Microkernel design for modularity and fault isolation.
-*   **Base:** Built upon the solid foundation of Debian/GNU.
-*   **Further Reading:** For more information on kernel development, refer to the official documentation: [Linux Kernel Documentation](https://docs.kernel.org/index.html)
-
-### 3. Desktop Environments
+### 4. Desktop Environments
 
 Unified Cosmic AI will support a wide range of popular desktop environments to provide users with maximum flexibility and choice. The initially supported environments will be:
 
@@ -56,7 +67,7 @@ Unified Cosmic AI will support a wide range of popular desktop environments to p
 
 All supported desktop environments will be deeply integrated with the AI Core to provide a seamless and intelligent user experience.
 
-### 4. Web3 OS
+### 5. Web3 OS
 
 The Web3 OS will be a novel, HTML5-based operating system written in Rust.
 
