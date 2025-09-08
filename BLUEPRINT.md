@@ -11,12 +11,12 @@ This document outlines the high-level architecture for Unified Cosmic AI, a next
 
 ## System Architecture
 
-Unified Cosmic AI is composed of four main components:
+Unified Cosmic AI is composed of four main components, each designed to be modular and work in concert with the others.
 
-1.  **AI Core:** The intelligent heart of the OS.
-2.  **Kernel:** A Debian/GNU-based microkernel.
-3.  **Desktop Environments:** Support for KDE Plasma and GNOME Trixie.
-4.  **Web3 OS:** An HTML5-based operating system written in Rust.
+1.  **AI Core:** The intelligent heart of the OS, responsible for all high-level cognitive functions.
+2.  **Kernel:** A stable and secure Debian/GNU-based microkernel that provides the foundational layer for the OS.
+3.  **Desktop Environments:** Support for both KDE Plasma and GNOME Trixie, offering users a choice of modern, intuitive interfaces.
+4.  **Web3 OS:** A novel, HTML5-based operating system written in Rust, providing a secure, decentralized, and user-centric platform.
 
 ### 1. AI Core
 
@@ -24,17 +24,17 @@ The AI Core will be responsible for:
 
 *   **System-wide Orchestration:** Intelligently managing system resources, applications, and workflows.
 *   **Personalized User Experience:** Adapting the OS to individual user habits and preferences.
-*   **AI-Powered Features:** Providing features such as natural language processing, predictive text, and intelligent search.
+*   **AI-Powered Features:** Providing a wide range of intelligent features, including advanced natural language processing, predictive text, intelligent search, automated workflows, and personalized user assistance.
 
 #### Core Components
 
-The AI Core is built upon a philosophy of harmonious alignment between five key components. For a detailed explanation of this philosophy, see [`ai-core/CORE_PHILOSOPHY.md`](ai-core/CORE_PHILOSOPHY.md).
+The AI Core is built upon a philosophy of harmonious alignment between five key components. For a detailed explanation of this philosophy, and the principles behind each core, see the [**Core Philosophy Document**](ai-core/CORE_PHILOSOPHY.md).
 
-*   **Blackbox Core:** Handles interactions with opaque, external systems.
-*   **Whitebox Core:** Contains the transparent, internal logic of the AI. It is responsible for the core cognitive functions of the system, including learning, reasoning, self-correction, and understanding natural language.
-*   **Glassbox Core:** Provides observability and monitoring for the entire system.
-*   **Conscience Module:** Serves as the moral compass, ensuring all actions align with the Sacred Principles.
-*   **Container Core:** Manages and orchestrates containerized AI frameworks for specialized tasks (e.g., NLP, Computer Vision).
+*   **[Blackbox Core](ai-core/CORE_PHILOSOPHY.md#1-the-blackbox-core-the-opaque-interface):** Handles interactions with opaque, external systems.
+*   **[Whitebox Core](ai-core/CORE_PHILOSOPHY.md#2-the-whitebox-core-the-transparent-logic):** Contains the transparent, internal logic of the AI. It is responsible for the core cognitive functions of the system, including learning, reasoning, self-correction, and understanding natural language.
+*   **[Glassbox Core](ai-core/CORE_PHILOSOPHY.md#3-the-glassbox-core-the-observability-engine):** Provides observability and monitoring for the entire system.
+*   **[Conscience Module](ai-core/CORE_PHILOSOPHY.md#4-the-conscience-module-the-moral-compass):** Serves as the moral compass, ensuring all actions align with the Sacred Principles.
+*   **[Container Core](ai-core/CORE_PHILOSOPHY.md#5-the-container-core-the-framework-orchestrator):** Manages and orchestrates containerized AI frameworks for specialized tasks (e.g., NLP, Computer Vision).
 
 ### 2. Kernel
 

@@ -11,16 +11,19 @@ This phase is focused on research, architectural design, and the development of 
 ### **Q1: Kernel and AI Core Research**
 *   **Tasks:**
     *   In-depth research into microkernel architecture based on Debian/GNU.
-    *   Define the core APIs for the AI Core.
-    *   Develop a proof-of-concept for the AI orchestration engine.
-*   **Milestone:** A detailed technical specification for the kernel and AI Core.
+    *   Define the core APIs for the AI Core, including the Blackbox, Whitebox, and Glassbox cores.
+    *   Design the architecture for the Conscience Module and its integration points.
+    *   Design the architecture for the Container Core and its role in managing AI frameworks.
+    *   Develop a proof-of-concept for the AI orchestration engine within the Whitebox Core.
+*   **Milestone:** A detailed technical specification for the kernel and all five components of the AI Core.
 
 ### **Q2: Web3 OS and Desktop Environment Prototyping**
 *   **Tasks:**
     *   Develop a prototype of the HTML5-based Web3 OS using Rust.
+    *   Develop a proof-of-concept for the Container Core, demonstrating its ability to manage a sample AI model.
     *   Begin integration of KDE Plasma and GNOME Trixie with a mock AI Core.
     *   Establish the foundational infrastructure for decentralized identity.
-*   **Milestone:** A functional prototype of the Web3 OS running a basic desktop environment.
+*   **Milestone:** A functional prototype of the Web3 OS that can leverage the Container Core to run a simple AI task.
 
 ---
 
@@ -30,10 +33,11 @@ This phase is focused on integrating the core components and preparing for an in
 
 ### **Q3: Core Component Integration**
 *   **Tasks:**
-    *   Integrate the AI Core with the microkernel.
+    *   Integrate the Whitebox, Blackbox, and Glassbox cores with the microkernel.
+    *   Integrate the Conscience Module to provide ethical oversight on all AI Core operations.
     *   Connect the Web3 OS to the underlying kernel and AI Core.
     *   Develop the initial set of system-level dApps (e.g., settings, file manager).
-*   **Milestone:** A unified build of the OS with all major components communicating.
+*   **Milestone:** A unified build of the OS with all major components communicating, and the Conscience Module actively monitoring operations.
 
 ### **Q4: Initial Developer Release**
 *   **Tasks:**
