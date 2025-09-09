@@ -8,9 +8,14 @@ from fms.utils.activation import str_to_activation
 
 def pad_tensor_by_size(input_tensor: torch.Tensor, pad_size: int):
     """
-    Padding x tensor with `pad_size` on the seq_len dim (dim=1)
+    Pads a tensor with `pad_size` on the seq_len dim (dim=1).
 
-    Assumes that we only have tensors of either size 4 or 3
+    Args:
+        input_tensor (torch.Tensor): The input tensor.
+        pad_size (int): The amount of padding to add.
+
+    Returns:
+        torch.Tensor: The padded tensor.
     """
     pad_shape = (
         (0, 0, 0, 0, 0, pad_size, 0, 0)
@@ -23,10 +28,16 @@ def pad_tensor_by_size(input_tensor: torch.Tensor, pad_size: int):
 
 def reshape_into_chunks(input_tensor, pad_size, chunk_size):
     """
-    Padding input_tensor with `pad_size` on the seq_len dim (dim=1) and
-    simultaneously splitting it into chunk sequences.
+    Pads input_tensor with `pad_size` on the seq_len dim (dim=1) and
+    simultaneously splits it into chunk sequences.
 
-    Assumes that we only have tensors of either size 4 or 3
+    Args:
+        input_tensor (torch.Tensor): The input tensor.
+        pad_size (int): The amount of padding to add.
+        chunk_size (int): The size of each chunk.
+
+    Returns:
+        torch.Tensor: The reshaped tensor.
     """
     # [bsz, seq_len, ...] -> [bsz, seq_len multiple of chunk_size, ...]
     input_tensor = pad_tensor_by_size(input_tensor, pad_size)
@@ -50,6 +61,12 @@ def reshape_into_chunks(input_tensor, pad_size, chunk_size):
 def segment_sum(input_tensor):
     """
     More stable segment sum calculation. Uses cumulative sums and masking instead of direct subtractions.
+
+    Args:
+        input_tensor (torch.Tensor): The input tensor.
+
+    Returns:
+        torch.Tensor: The segment sum tensor.
     """
     chunk_size = input_tensor.size(-1)
     # 1. expand input tensor to have an additional dimension and repeat along that dimension
@@ -78,12 +95,30 @@ def segment_sum(input_tensor):
 
 
 class RMSNormGated(nn.Module):
+    """
+    A gated RMSNorm layer.
+
+    Args:
+        emb_dim (int): The embedding dimension.
+        eps (float): The epsilon value for numerical stability.
+    """
+
     def __init__(self, emb_dim, eps=1e-6):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(emb_dim))
         self.variance_epsilon = eps
 
     def forward(self, hidden_states, gate=None):
+        """
+        Forward pass for the gated RMSNorm layer.
+
+        Args:
+            hidden_states (torch.Tensor): The input hidden states.
+            gate (torch.Tensor, optional): The gate tensor. Defaults to None.
+
+        Returns:
+            torch.Tensor: The output hidden states.
+        """
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.to(torch.float32)
 
@@ -96,6 +131,22 @@ class RMSNormGated(nn.Module):
 
 
 class SSMCacheUnit:
+    """
+    A cache unit for the SSM layer.
+
+    Args:
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of heads.
+        head_dim (int): The head dimension.
+        conv_kernel (int): The convolutional kernel size.
+        expand (float): The expansion factor.
+        n_groups (int): The number of groups.
+        state_size (int): The state size.
+        batch_size (int): The batch size.
+        dtype (torch.dtype): The data type.
+        device (Optional[str]): The device to place the cache on.
+    """
+
     def __init__(
         self,
         emb_dim: int,
@@ -129,6 +180,16 @@ class SSMCacheUnit:
     def update_conv_state(
         self, new_conv_state: torch.Tensor, cache_position: torch.Tensor
     ):
+        """
+        Updates the convolutional state.
+
+        Args:
+            new_conv_state (torch.Tensor): The new convolutional state.
+            cache_position (torch.Tensor): The cache position.
+
+        Returns:
+            torch.Tensor: The updated convolutional state.
+        """
         conv_state = self.conv_state
         cache_position = cache_position.clamp(0, self.conv_kernel_size - 1)
 
@@ -142,6 +203,13 @@ class SSMCacheUnit:
 def apply_mask_to_padding_states(hidden_states, attention_mask):
     """
     Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
+
+    Args:
+        hidden_states (torch.Tensor): The hidden states.
+        attention_mask (torch.Tensor): The attention mask.
+
+    Returns:
+        torch.Tensor: The masked hidden states.
     """
     if (
         attention_mask is not None
@@ -157,6 +225,24 @@ def apply_mask_to_padding_states(hidden_states, attention_mask):
 
 
 class SSM(nn.Module):
+    """
+    A Structured State Space Model (SSM) layer.
+
+    Args:
+        nheads (int): The number of heads.
+        emb_dim (int): The embedding dimension.
+        state_size (int): The state size.
+        conv_kernel (int): The convolutional kernel size.
+        expand (float): The expansion factor.
+        use_bias (bool): Whether to use bias in the linear layers.
+        use_conv_bias (bool): Whether to use bias in the convolutional layer.
+        activation_fn (str): The activation function to use.
+        norm_eps (float): The epsilon value for layer normalization.
+        n_groups (int): The number of groups.
+        head_dim (int): The head dimension.
+        chunk_size (int): The chunk size.
+    """
+
     def __init__(
         self,
         nheads: int,
@@ -231,6 +317,19 @@ class SSM(nn.Module):
         cache_position: Optional[torch.Tensor] = None,
         **kwargs,
     ):
+        """
+        Forward pass for the SSM layer.
+
+        Args:
+            input_states (torch.Tensor): The input states.
+            mask (torch.Tensor): The attention mask.
+            past_key_value_state (Optional[SSMCacheUnit]): The past key-value state.
+            cache_position (Optional[torch.Tensor]): The cache position.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Tuple[torch.Tensor, Optional[SSMCacheUnit]]: The contextualized states and the past key-value state.
+        """
         batch_size, seq_len, _ = input_states.shape
         dtype = input_states.dtype
 

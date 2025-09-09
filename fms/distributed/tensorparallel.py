@@ -6,7 +6,16 @@ import torch.distributed._functional_collectives as funcol
 
 
 def _all_gather(input_: torch.Tensor, pg: dist.ProcessGroup) -> torch.Tensor:
-    """Gather the input tensor across model parallel group."""
+    """
+    Gather the input tensor across model parallel group.
+
+    Args:
+        input_ (torch.Tensor): The input tensor.
+        pg (dist.ProcessGroup): The process group.
+
+    Returns:
+        torch.Tensor: The gathered tensor.
+    """
 
     if pg.size() == 1:
         return input_
@@ -22,7 +31,16 @@ def _all_gather(input_: torch.Tensor, pg: dist.ProcessGroup) -> torch.Tensor:
 
 
 def _all_reduce(input_: torch.Tensor, pg: dist.ProcessGroup) -> torch.Tensor:
-    """All-reduce the input tensor across model parallel group."""
+    """
+    All-reduce the input tensor across model parallel group.
+
+    Args:
+        input_ (torch.Tensor): The input tensor.
+        pg (dist.ProcessGroup): The process group.
+
+    Returns:
+        torch.Tensor: The all-reduced tensor.
+    """
 
     if pg.size() == 1:
         return input_
@@ -31,8 +49,18 @@ def _all_reduce(input_: torch.Tensor, pg: dist.ProcessGroup) -> torch.Tensor:
 
 
 def _split(input_: torch.Tensor, rank: int, pg: dist.ProcessGroup) -> torch.Tensor:
-    """Split the tensor along its last dimension and keep the
-    corresponding slice."""
+    """
+    Split the tensor along its last dimension and keep the
+    corresponding slice.
+
+    Args:
+        input_ (torch.Tensor): The input tensor.
+        rank (int): The rank of the current process.
+        pg (dist.ProcessGroup): The process group.
+
+    Returns:
+        torch.Tensor: The split tensor.
+    """
 
     if pg.size() == 1:
         return input_
@@ -51,7 +79,9 @@ def _split(input_: torch.Tensor, rank: int, pg: dist.ProcessGroup) -> torch.Tens
 
 
 class _CopyToModelParallelRegion(torch.autograd.Function):
-    """Pass the input to the model parallel region."""
+    """
+    Pass the input to the model parallel region.
+    """
 
     @staticmethod
     def symbolic(graph, input_, pg):
@@ -68,7 +98,9 @@ class _CopyToModelParallelRegion(torch.autograd.Function):
 
 
 class _ReduceFromModelParallelRegion(torch.autograd.Function):
-    """All-reduce the input from the model parallel region."""
+    """
+    All-reduce the input from the model parallel region.
+    """
 
     @staticmethod
     def symbolic(graph, input_, pg):
@@ -84,7 +116,9 @@ class _ReduceFromModelParallelRegion(torch.autograd.Function):
 
 
 class _AllGatherFromModelParallelRegion(torch.autograd.Function):
-    """Gather the input from the model parallel region."""
+    """
+    Gather the input from the model parallel region.
+    """
 
     @staticmethod
     def symbolic(graph, input_, pg):
@@ -102,16 +136,47 @@ class _AllGatherFromModelParallelRegion(torch.autograd.Function):
 
 
 def copy_to_tensor_model_parallel_region(input_, pg: dist.ProcessGroup):
+    """
+    Copy the input to the model parallel region.
+
+    Args:
+        input_: The input tensor.
+        pg (dist.ProcessGroup): The process group.
+
+    Returns:
+        The result of the copy operation.
+    """
     return _CopyToModelParallelRegion.apply(input_, pg)
 
 
 def reduce_from_tensor_model_parallel_region(
     input_: torch.Tensor, pg: dist.ProcessGroup
 ):
+    """
+    All-reduce the input from the model parallel region.
+
+    Args:
+        input_ (torch.Tensor): The input tensor.
+        pg (dist.ProcessGroup): The process group.
+
+    Returns:
+        The result of the reduce operation.
+    """
     return _ReduceFromModelParallelRegion.apply(input_, pg)
 
 
 def all_gather_from_tensor_model_parallel_region(
     input_: torch.Tensor, rank: int, pg: dist.ProcessGroup
 ):
+    """
+    Gather the input from the model parallel region.
+
+    Args:
+        input_ (torch.Tensor): The input tensor.
+        rank (int): The rank of the current process.
+        pg (dist.ProcessGroup): The process group.
+
+    Returns:
+        The result of the all-gather operation.
+    """
     return _AllGatherFromModelParallelRegion.apply(input_, rank, pg)

@@ -21,6 +21,27 @@ from fms.utils.config import ModelConfig
 
 @dataclass
 class GPTBigCodeConfig(ModelConfig):
+    """
+    Configuration for the GPTBigCode model.
+
+    Args:
+        src_vocab_size (int): The size of the source vocabulary.
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of attention heads.
+        nlayers (int): The number of layers in the model.
+        pad_id (int): The ID of the padding token.
+        max_expected_seq_len (int): The maximum expected sequence length.
+        hidden_grow_factor (float): The growth factor for the hidden layer in the feed-forward network.
+        activation_fn (str): The activation function to use.
+        p_dropout (float): The dropout probability.
+        emb_dropout (float): The dropout probability for embeddings.
+        multiquery_attn (bool): Whether to use multi-query attention.
+        ln_eps (float): The epsilon value for layer normalization.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        fused_weights (bool): Whether to use fused weights.
+        tie_heads (bool): Whether to tie the embedding and output heads.
+    """
+
     # This param default is based on https://huggingface.co/bigcode/gpt_bigcode-santacoder
     src_vocab_size: int = 49157
     # This param default is based on https://huggingface.co/bigcode/gpt_bigcode-santacoder
@@ -43,6 +64,13 @@ class GPTBigCodeConfig(ModelConfig):
 
 
 class GPTBigCodeBlock(nn.Module):
+    """
+    A single block of the GPTBigCode model.
+
+    Args:
+        config (GPTBigCodeConfig): The configuration for the GPTBigCode model.
+    """
+
     def __init__(self, config: GPTBigCodeConfig):
         super().__init__()
         self.config = config
@@ -83,6 +111,20 @@ class GPTBigCodeBlock(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the GPTBigCodeBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_state (Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]): The past key-value state for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[torch.FloatTensor, torch.FloatTensor]]]:
+                The output tensor, and the new cache if use_cache is True.
+        """
         self_attn_past_key_value = past_key_value_state
 
         # first we do MHA and Add&Norm
@@ -121,6 +163,14 @@ class GPTBigCodeBlock(nn.Module):
 
 
 class GPTBigCodeHeadless(nn.Module):
+    """
+    The GPTBigCode model without the language model head.
+
+    Args:
+        config (GPTBigCodeConfig): The configuration for the GPTBigCode model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+    """
+
     def __init__(
         self, config: GPTBigCodeConfig, distributed_strategy: DistributedStrategy
     ):
@@ -158,7 +208,18 @@ class GPTBigCodeHeadless(nn.Module):
             List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]
         ] = None,
     ):
-        """compute the position ids if the use happened not to give any"""
+        """
+        Computes the position IDs for the input tensor.
+
+        Args:
+            is_pad (torch.Tensor): A boolean tensor indicating whether each token is a padding token.
+            use_cache (bool): Whether to use caching.
+            past_key_value_states (Optional[List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]):
+                The past key-value states for caching.
+
+        Returns:
+            torch.LongTensor: The position IDs.
+        """
         position_ids = ((~is_pad).cumsum(1) - 1).clamp(min=0)
 
         # Compute position_ids based on cache config
@@ -179,6 +240,21 @@ class GPTBigCodeHeadless(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the GPTBigCodeHeadless model.
+
+        Args:
+            x (torch.LongTensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]):
+                The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]:
+                The output tensor and the new cache if use_cache is True.
+        """
         # Embed the given vocabulary indices using the given attention mask, with pre-/post-norm and dropout as specified
         # x_in: batch_size x seq_len
         # mask: batch_size x seq_len x seq_len
@@ -244,6 +320,15 @@ class GPTBigCodeHeadless(nn.Module):
 
 # Implements the decoder-only GPTBigCodeModel
 class GPTBigCode(nn.Module):
+    """
+    The GPTBigCode model.
+
+    Args:
+        config (Optional[GPTBigCodeConfig]): The configuration for the GPTBigCode model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[GPTBigCodeConfig] = None,
@@ -265,12 +350,30 @@ class GPTBigCode(nn.Module):
 
     @classmethod
     def from_config(cls, config: GPTBigCodeConfig) -> "GPTBigCode":
+        """
+        Creates a GPTBigCode model from a configuration object.
+
+        Args:
+            config (GPTBigCodeConfig): The configuration for the GPTBigCode model.
+
+        Returns:
+            GPTBigCode: The GPTBigCode model.
+        """
         return cls(config)
 
     def get_config(self) -> GPTBigCodeConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            GPTBigCodeConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         # Do not re-initialize head, as weights are tied
         for m in self.modules():
             if (
@@ -287,6 +390,9 @@ class GPTBigCode(nn.Module):
                 )
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as tying the embedding and output heads.
+        """
         # This function is called in `get_model` after the model is fully initalized in the correct device
 
         # if this model ties weights, they are tied here
@@ -306,6 +412,21 @@ class GPTBigCode(nn.Module):
         only_last_token: bool = False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the GPTBigCode model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[Tuple[torch.FloatTensor,]]): The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            only_last_token (bool): Whether to only return the predictions for the last token.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[torch.FloatTensor,]]]:
+                The output predictions, and the new cache if use_cache is True.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x,
             position_ids=position_ids,
@@ -392,6 +513,16 @@ _architecture_name = "gpt_bigcode"
 
 
 def _gpt_bigcode_factory_factory(config):
+    """
+    A factory function that creates a factory function for a GPTBigCode model with a given configuration.
+
+    Args:
+        config (GPTBigCodeConfig): The configuration for the GPTBigCode model.
+
+    Returns:
+        Callable: A factory function that creates a GPTBigCode model.
+    """
+
     def factory(**kwargs):
         return GPTBigCode(config, **kwargs)
 
@@ -425,6 +556,18 @@ serialization.register_adapter_step(
 
 
 def _gptq_unfuse(fused_weight, fused_weight_name: str, emb_size: int, pack_ratio: int):
+    """
+    Unfuses a GPTQ-quantized weight tensor.
+
+    Args:
+        fused_weight (torch.Tensor): The fused weight tensor.
+        fused_weight_name (str): The name of the fused weight.
+        emb_size (int): The embedding size.
+        pack_ratio (int): The packing ratio for quantization.
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: The unfused query, key, and value weights.
+    """
     if "qweight" in fused_weight_name:
         out_feat = fused_weight.size(1)
         kv_out_feat = (out_feat - emb_size) // 2
@@ -465,6 +608,17 @@ def _gptq_unfuse(fused_weight, fused_weight_name: str, emb_size: int, pack_ratio
 
 
 def _torch_unfuse(fused_weight, fused_weight_name: str, emb_size: int):
+    """
+    Unfuses a torch weight tensor.
+
+    Args:
+        fused_weight (torch.Tensor): The fused weight tensor.
+        fused_weight_name (str): The name of the fused weight.
+        emb_size (int): The embedding size.
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: The unfused query, key, and value weights.
+    """
     out_feat = fused_weight.size(0)
     kv_out_feat = (out_feat - emb_size) // 2
     return (
@@ -479,6 +633,17 @@ def _weight_fusion(
     model_config: Optional[GPTBigCodeConfig] = None,
     **kwargs,
 ) -> Mapping[str, Any]:
+    """
+    Performs weight fusion or unfusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[GPTBigCodeConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -527,6 +692,16 @@ serialization.register_adapter_step(_architecture_name, "weight_fusion", _weight
 
 
 def _hf_to_fms_names(hf_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face model state dictionary names to FMS model state dictionary names.
+
+    Args:
+        hf_sd (Mapping[str, Any]): The Hugging Face state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The FMS state dictionary.
+    """
     import re
 
     replacements = [

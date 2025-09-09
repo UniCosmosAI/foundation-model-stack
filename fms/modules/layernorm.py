@@ -6,19 +6,14 @@ class LayerNormParameterized(nn.Module):
     """
     A generalized LayerNorm implementation. With all optional arguments set to True, equivalent to nn.LayerNorm up to epsilon stabilization term
     (this class divides inputs by min(norm, eps), while nn.LayerNorm divides by norm + eps).
-    ...
-    Args
-    ----
-    normalized_shape : int
-        Dimensionality of input data (size of final tensor axis)
-    eps : float
-        Safety term to prevent division by zero. Make sure the chosen value fits in the range of your encoding scheme (i.e. fp16 requires eps >= 6e-8).
-    elementwise_scale : bool
-        Include a learned scaling term after normalization?
-    elementwise_shift : bool
-        Include a learned bias term after normalization?
-    use_mean : bool
-        Recenter inputs around zero before normalizing, or just rescale?
+
+    Args:
+        normalized_shape (int): Dimensionality of input data (size of final tensor axis).
+        eps (float): Safety term to prevent division by zero.
+        elementwise_scale (bool): Include a learned scaling term after normalization?
+        elementwise_shift (bool): Include a learned bias term after normalization?
+        use_mean (bool): Recenter inputs around zero before normalizing, or just rescale?
+        use_high_precision_pow (bool): Use high precision for power operations.
     """
 
     def __init__(
@@ -48,12 +43,24 @@ class LayerNormParameterized(nn.Module):
         #     self.register_parameter("bias", None)
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the LayerNormParameterized layer.
+        """
         if self.elementwise_scale:
             self.weight.data.fill_(1)
         if self.elementwise_shift:
             self.bias.data.zero_()
 
     def forward(self, x):
+        """
+        Forward pass for the LayerNormParameterized layer.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         if self.use_mean:
             x = x - x.mean(-1, keepdim=True)
         # x = F.normalize(x, dim=-1)*math.sqrt(x.size(-1))

@@ -27,6 +27,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SiglipVisionConfig(ModelConfig):
+    """
+    Configuration for the SiglipVision model.
+
+    Args:
+        hidden_size (int): The hidden size of the model.
+        intermediate_size (int): The intermediate size of the feed-forward network.
+        nlayers (int): The number of layers in the model.
+        nheads (int): The number of attention heads.
+        num_channels (int): The number of channels in the input image.
+        image_size (int): The size of the input image.
+        patch_size (int): The size of the patches.
+        hidden_act (str): The activation function to use.
+        layer_norm_eps (float): The epsilon value for layer normalization.
+        attention_dropout (float): The dropout probability for attention layers.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     # Default config yields vision encoder of the google/siglip-base-patch16-224 model
     hidden_size: int = 768
     intermediate_size: int = 3072
@@ -43,6 +61,13 @@ class SiglipVisionConfig(ModelConfig):
 
 
 class SiglipVisionEmbeddings(nn.Module):
+    """
+    SiglipVisionEmbeddings layer.
+
+    Args:
+        config (SiglipVisionConfig): The configuration for the SiglipVision model.
+    """
+
     def __init__(self, config: SiglipVisionConfig):
         super().__init__()
         self.config = config
@@ -64,6 +89,9 @@ class SiglipVisionEmbeddings(nn.Module):
         self.position_ids = torch.arange(self.num_positions).expand((1, -1))
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the embedding layer.
+        """
         nn.init.normal_(
             self.position_embedding.weight, std=1 / np.sqrt(self.config.hidden_size)
         )
@@ -76,6 +104,9 @@ class SiglipVisionEmbeddings(nn.Module):
         nn.init.trunc_normal_(tensor, std=math.sqrt(variance))
 
     def post_init(self):
+        """
+        Performs post-initialization steps.
+        """
         device = self.position_embedding.weight.device
         self.position_ids = torch.arange(self.num_positions, device=device).expand(
             (1, -1)
@@ -83,6 +114,15 @@ class SiglipVisionEmbeddings(nn.Module):
 
     # NOTE: Does not support interpolation of position encodings-- not used by granite-vision
     def forward(self, pixel_values: torch.FloatTensor) -> torch.Tensor:
+        """
+        Forward pass for the embedding layer.
+
+        Args:
+            pixel_values (torch.FloatTensor): The input pixel values.
+
+        Returns:
+            torch.Tensor: The output embeddings.
+        """
         _, _, height, width = pixel_values.shape
         target_dtype = self.patch_embedding.weight.dtype
         patch_embeds = self.patch_embedding(
@@ -94,6 +134,13 @@ class SiglipVisionEmbeddings(nn.Module):
 
 
 class SiglipEncoderLayer(nn.Module):
+    """
+    A single layer of the Siglip encoder.
+
+    Args:
+        config (SiglipVisionConfig): The configuration for the SiglipVision model.
+    """
+
     def __init__(self, config: SiglipVisionConfig):
         super().__init__()
         self.config = config
@@ -146,6 +193,9 @@ class SiglipEncoderLayer(nn.Module):
         )
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the encoder layer.
+        """
         for m in self.modules():
             if (
                 isinstance(m, MultiHeadAttention)
@@ -159,6 +209,16 @@ class SiglipEncoderLayer(nn.Module):
         hidden_states: torch.Tensor,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the encoder layer.
+
+        Args:
+            hidden_states (torch.Tensor): The input hidden states.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            torch.Tensor: The output hidden states.
+        """
         attn_kwargs["attn_name"] = attn_kwargs.get("attn_name", "sdpa_bidirectional")
 
         residual = hidden_states
@@ -175,6 +235,13 @@ class SiglipEncoderLayer(nn.Module):
 
 
 class SiglipEncoder(nn.Module):
+    """
+    The Siglip encoder.
+
+    Args:
+        config (SiglipVisionConfig): The configuration for the SiglipVision model.
+    """
+
     def __init__(self, config: SiglipVisionConfig):
         super().__init__()
         self.config = config
@@ -183,6 +250,9 @@ class SiglipEncoder(nn.Module):
         )
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the encoder.
+        """
         for m in self.layers:
             m.reset_parameters()
 
@@ -192,6 +262,17 @@ class SiglipEncoder(nn.Module):
         output_hidden_states=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the encoder.
+
+        Args:
+            inputs_embeds (torch.Tensor): The input embeddings.
+            output_hidden_states (bool): Whether to output hidden states.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, Tuple[torch.Tensor, ...]]: The last hidden state and a tuple of all hidden states.
+        """
         hidden_states = inputs_embeds
         encoder_states = (hidden_states,) if output_hidden_states else ()
 
@@ -204,6 +285,13 @@ class SiglipEncoder(nn.Module):
 
 
 class SiglipMultiheadAttentionPoolingHead(nn.Module):
+    """
+    The multi-head attention pooling head for the Siglip model.
+
+    Args:
+        config (SiglipVisionConfig): The configuration for the SiglipVision model.
+    """
+
     def __init__(self, config: SiglipVisionConfig):
         super().__init__()
         self.probe = nn.Parameter(torch.randn(1, 1, config.hidden_size))
@@ -232,6 +320,9 @@ class SiglipMultiheadAttentionPoolingHead(nn.Module):
         )
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the pooling head.
+        """
         nn.init.xavier_uniform_(self.probe.data)
         nn.init.xavier_uniform_(self.attention.in_proj_weight.data)
         nn.init.zeros_(self.attention.in_proj_bias.data)
@@ -239,6 +330,15 @@ class SiglipMultiheadAttentionPoolingHead(nn.Module):
         self.mlp.reset_parameters()
 
     def forward(self, hidden_state):
+        """
+        Forward pass for the pooling head.
+
+        Args:
+            hidden_state (torch.Tensor): The input hidden state.
+
+        Returns:
+            torch.Tensor: The output hidden state.
+        """
         batch_size = hidden_state.shape[0]
         probe = self.probe.repeat(batch_size, 1, 1)
         hidden_state = self.attention(probe, hidden_state, hidden_state)[0]
@@ -251,6 +351,15 @@ class SiglipMultiheadAttentionPoolingHead(nn.Module):
 
 
 class SiglipVisionHeadless(nn.Module):
+    """
+    The Siglip vision model without the head.
+
+    Args:
+        config (Optional[SiglipVisionConfig]): The configuration for the SiglipVision model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[SiglipVisionConfig] = None,
@@ -276,10 +385,16 @@ class SiglipVisionHeadless(nn.Module):
         )
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         for m in self.modules():
             m.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps.
+        """
         self.embeddings.post_init()
 
     def forward(
@@ -288,6 +403,17 @@ class SiglipVisionHeadless(nn.Module):
         output_hidden_states=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the headless model.
+
+        Args:
+            pixel_values (torch.Tensor): The input pixel values.
+            output_hidden_states (bool): Whether to output hidden states.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, Tuple[torch.Tensor, ...]]: The last hidden state and a tuple of all hidden states.
+        """
         hidden_states = self.embeddings(pixel_values)
         last_hidden_state, hidden_states = self.encoder(
             inputs_embeds=hidden_states,
@@ -299,6 +425,15 @@ class SiglipVisionHeadless(nn.Module):
 
 
 class SiglipVision(nn.Module):
+    """
+    The Siglip vision model.
+
+    Args:
+        config (Optional[SiglipVisionConfig]): The configuration for the SiglipVision model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[SiglipVisionConfig] = None,
@@ -319,16 +454,37 @@ class SiglipVision(nn.Module):
 
     @classmethod
     def from_config(cls, config: SiglipVisionConfig) -> "SiglipVision":
+        """
+        Creates a SiglipVision model from a configuration object.
+
+        Args:
+            config (SiglipVisionConfig): The configuration for the SiglipVision model.
+
+        Returns:
+            SiglipVision: The SiglipVision model.
+        """
         return cls(config)
 
     def get_config(self) -> SiglipVisionConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            SiglipVisionConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         self.head.reset_parameters()
         self.base_model.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps.
+        """
         self.base_model.post_init()
 
     def forward(
@@ -337,6 +493,18 @@ class SiglipVision(nn.Module):
         output_hidden_states=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the SiglipVision model.
+
+        Args:
+            pixel_values (torch.Tensor): The input pixel values.
+            output_hidden_states (bool): Whether to output hidden states.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, Tuple[torch.Tensor, ...]]]:
+                The last hidden state and the pooler output, and optionally the hidden states.
+        """
         last_hidden_state, hidden_states = self.base_model(
             pixel_values, output_hidden_states=output_hidden_states, **attn_kwargs
         )
@@ -352,6 +520,16 @@ _architecture_name = "siglip_vision"
 
 
 def _siglip_vision_factory_factory(config):
+    """
+    A factory function that creates a factory function for a SiglipVision model with a given configuration.
+
+    Args:
+        config (SiglipVisionConfig): The configuration for the SiglipVision model.
+
+    Returns:
+        Callable: A factory function that creates a SiglipVision model.
+    """
+
     def factory(**kwargs):
         return SiglipVision(config, **kwargs)
 
@@ -368,6 +546,17 @@ models.register_model(
 def _weight_fusion(
     input_sd: Mapping, model_config: Optional[SiglipVisionConfig] = None, **kwargs
 ):
+    """
+    Performs weight fusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping): The input state dictionary.
+        model_config (Optional[SiglipVisionConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -380,6 +569,16 @@ def _weight_fusion(
 
 
 def _hf_to_fms_names(input_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face SiglipVision state dictionary names to FMS SiglipVision state dictionary names.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     replacements = [
         (r"vision_model\.head", "head"),
         (r"^vision_model\.encoder", "base_model.encoder"),

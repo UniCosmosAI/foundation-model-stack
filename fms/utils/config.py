@@ -14,8 +14,22 @@ T = TypeVar("T", bound="ModelConfig")
 
 @dataclass
 class ModelConfig:
+    """
+    A base class for model configurations.
+    This class provides methods for loading, saving, and updating model configurations.
+    """
+
     @classmethod
     def load(cls, json_file: Union[str, os.PathLike]) -> "ModelConfig":
+        """
+        Load a model configuration from a JSON file.
+
+        Args:
+            json_file (Union[str, os.PathLike]): The path to the JSON file.
+
+        Returns:
+            ModelConfig: The loaded model configuration.
+        """
         with open(json_file, "r", encoding="utf-8") as reader:
             text = reader.read()
         json_dict = json.loads(text)
@@ -29,26 +43,35 @@ class ModelConfig:
         )
 
     def as_dict(self) -> dict:
+        """
+        Convert the model configuration to a dictionary.
+
+        Returns:
+            dict: The model configuration as a dictionary.
+        """
         return asdict(self)
 
     def save(self, file_path: Union[str, os.PathLike]):
+        """
+        Save the model configuration to a JSON file.
+
+        Args:
+            file_path (Union[str, os.PathLike]): The path to the JSON file.
+        """
         with open(file_path, "w") as f:
             json.dump(self.as_dict(), f)
 
     def updated(self: T, **kwargs) -> T:
-        """Clone this ModelConfig and override the parameters of the ModelConfig specified by kwargs
+        """
+        Clone this ModelConfig and override the parameters of the ModelConfig specified by kwargs.
 
-        Note: This will always return a deep copy
+        Note: This will always return a deep copy.
 
-        Parameters
-        ----------
-        kwargs
-            all possibly ModelConfig dataclass named parameters to override
+        Args:
+            **kwargs: The parameters to override.
 
-        Returns
-        -------
-        ModelConfig
-            a new instance of ModelConfig with the parameters overridden
+        Returns:
+            ModelConfig: A new instance of ModelConfig with the parameters overridden.
         """
         # create a deep copy as we don't want to modify this reference
         copied_config = copy.deepcopy(self)

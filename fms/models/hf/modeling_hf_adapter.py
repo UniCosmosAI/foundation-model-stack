@@ -18,7 +18,8 @@ from fms.models.hf.utils import mask_2d_to_3d, mask_2d_to_3d_bidirectional
 
 
 class _HFBase(PreTrainedModel):
-    """This class represents any wrapped module that has been adapted to the HuggingFace PreTrained model API.
+    """
+    This class represents any wrapped module that has been adapted to the HuggingFace PreTrained model API.
 
     This class is internal implementation detail for holding the underlying native pytorch module as well as the default
     attention mask dimension expected by the module. It contains the most basic of huggingface functionality for
@@ -34,6 +35,14 @@ class _HFBase(PreTrainedModel):
     def __init__(
         self, model: nn.Module, config: PretrainedConfig, attention_mask_dim: int = 2
     ):
+        """
+        Initializes an _HFBase instance.
+
+        Args:
+            model (nn.Module): The native PyTorch model.
+            config (PretrainedConfig): The Hugging Face configuration.
+            attention_mask_dim (int): The expected dimension of the attention mask.
+        """
         super().__init__(config)
         self.main_input_name = "input_ids"
 
@@ -46,6 +55,12 @@ class _HFBase(PreTrainedModel):
 
     @abc.abstractmethod
     def set_input_embeddings(self, value: nn.Module):
+        """
+        Sets the input embeddings for the model.
+
+        Args:
+            value (nn.Module): The new input embeddings.
+        """
         set_input_embeddings_method = getattr(self.model, "set_input_embeddings", None)
         if callable(set_input_embeddings_method):
             self.model.set_input_embeddings(value)
@@ -54,8 +69,12 @@ class _HFBase(PreTrainedModel):
 
     @abc.abstractmethod
     def get_input_embeddings(self) -> nn.Module:
-        """Gets this adapter models input embeddings. This is only required to be implemented if your underlying module
-        does not have a get_input_embeddings method
+        """
+        Gets this adapter model's input embeddings. This is only required to be implemented if your underlying module
+        does not have a get_input_embeddings method.
+
+        Returns:
+            nn.Module: The input embeddings.
         """
         get_input_embeddings_method = getattr(self.model, "get_input_embeddings", None)
         if callable(get_input_embeddings_method):
@@ -67,12 +86,16 @@ class _HFBase(PreTrainedModel):
     def _compute_masks(
         self, attention_mask: torch.Tensor, *args, **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Given an attention mask, compute the 2d/3d attention equivalent mask
+        """
+        Given an attention mask, compute the 2d/3d attention equivalent mask.
 
-        Parameters
-        ----------
-        attention_mask: torch.Tensor
-            a 2d or 3d attention mask
+        Args:
+            attention_mask (torch.Tensor): A 2d or 3d attention mask.
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The computed 3d and 2d attention masks.
         """
         pass
 
@@ -88,6 +111,23 @@ class _HFBase(PreTrainedModel):
         *args,
         **kwargs,
     ):
+        """
+        The forward pass of the model.
+
+        Args:
+            input_ids (Optional[torch.LongTensor]): The input IDs.
+            attention_mask (Optional[torch.FloatTensor]): The attention mask.
+            head_mask (Optional[torch.FloatTensor]): The head mask.
+            inputs_embeds (Optional[torch.FloatTensor]): The input embeddings.
+            output_attentions (Optional[bool]): Whether to output attentions.
+            output_hidden_states (Optional[bool]): Whether to output hidden states.
+            return_dict (Optional[bool]): Whether to return a dictionary.
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Union[BaseModelOutput, Tuple]: The model output.
+        """
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError(
                 "You cannot specify both input_ids and inputs_embeds at the same time"
@@ -143,12 +183,15 @@ class _HFBase(PreTrainedModel):
 
     @abc.abstractmethod
     def _adapt(self, *args, **kwargs) -> BaseModelOutput:
-        """adapt your models forward to that of huggingfaces forward method
+        """
+        Adapt your model's forward to that of huggingface's forward method.
 
-        Returns
-        -------
-        BaseModelOutput
-            a dataclass huggingface expects which includes model outputs
+        Args:
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            BaseModelOutput: A dataclass huggingface expects which includes model outputs.
         """
         pass
 

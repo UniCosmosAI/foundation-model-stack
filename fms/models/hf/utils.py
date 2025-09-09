@@ -15,7 +15,7 @@ from fms.models import get_model, list_variants
 
 
 def register_fms_models():
-    """Register all FMS models with huggingface AutoModels"""
+    """Register all FMS models with huggingface AutoModels."""
     from fms.models.hf import (
         _causal_lm_models,
         _headless_models,
@@ -41,16 +41,12 @@ def mask_2d_to_3d(inp: torch.Tensor) -> torch.Tensor:
     """
     Produces a block-diagonal boolean attention mask matrix A where A[i,j]=True if tokens i and j are both pads,
     or both non-pads, False otherwise.
-    ...
-    Args
-    ----
-    inp : torch.Tensor
-        Input batch of vocab indices. Expects shape [batch_size, sequence_length].
-    ...
-    Returns
-    -------
-    mask : torch.Tensor
-        Mask tensor corresponding to inp. Will be of shape [batch_size, sequence_length, sequence_length].
+
+    Args:
+        inp (torch.Tensor): Input batch of vocab indices. Expects shape [batch_size, sequence_length].
+
+    Returns:
+        torch.Tensor: Mask tensor corresponding to inp. Will be of shape [batch_size, sequence_length, sequence_length].
     """
     is_pad = inp == 0
     mask = is_pad.unsqueeze(-1) == is_pad.unsqueeze(-2)
@@ -66,19 +62,14 @@ def mask_2d_to_3d_bidirectional(
     from their respective inputs, False otherwise. If decoder_input is b*n1 and encoder_input is b*n2, output will be b*n1*n2.
 
     Note: There is a manual correction included in this function to avoid cross attending to nothing (in this case, we
-    default to attend to everything)
-    ...
-    Args
-    ----
-    decoder_input : torch.Tensor
-        Input batch of vocab indices. Expects shape [batch_size, sequence_length].
-    encoder_input : torch.Tensor
-        Input batch of vocab indices. Expects shape [batch_size, sequence_length].
-    ...
-    Returns
-    -------
-    mask : torch.Tensor
-        Mask tensor corresponding to inp. Will be of shape [batch_size, sequence_length1, sequence_length2].
+    default to attend to everything).
+
+    Args:
+        decoder_input (torch.Tensor): Input batch of vocab indices. Expects shape [batch_size, sequence_length].
+        encoder_input (torch.Tensor): Input batch of vocab indices. Expects shape [batch_size, sequence_length].
+
+    Returns:
+        torch.Tensor: Mask tensor corresponding to inp. Will be of shape [batch_size, sequence_length1, sequence_length2].
     """
 
     mask_encoder = encoder_input == 0
@@ -114,6 +105,16 @@ def mask_2d_to_3d_bidirectional(
 
 
 def _map_model_config(architecture, config):
+    """
+    Maps a Hugging Face model config to an FMS model config.
+
+    Args:
+        architecture (str): The model architecture.
+        config: The Hugging Face model config.
+
+    Returns:
+        Tuple[str, Dict[str, Any]]: The FMS architecture and config parameters.
+    """
     # Map HF model config to FMS model config
     infer_common_params = True
     config_params = {}
@@ -296,6 +297,16 @@ def _infer_model_configuration(
     model_id_or_path: str | os.PathLike,
     download_weights: bool = True,
 ) -> Dict[str, Any]:
+    """
+    Infers the model configuration from a model ID or path.
+
+    Args:
+        model_id_or_path (str | os.PathLike): The model ID or path.
+        download_weights (bool): Whether to download the weights.
+
+    Returns:
+        Dict[str, Any]: The model configuration parameters.
+    """
     # if the path does not exist, download it from huggingface and get the local path
     if not os.path.exists(model_id_or_path):
         from huggingface_hub import snapshot_download  # type: ignore
@@ -370,27 +381,24 @@ def as_fms_model(
     initialize_model_with_weights: bool = True,
 ) -> nn.Module:
     """
-    get an FMS model from a huggingface checkpoint
+    Get an FMS model from a huggingface checkpoint.
 
-    Parameters
-    ----------
-    model_id_or_path: Union[str, os.PathLike]
-        The huggingface hub model id or a local path. If the local path exists, the model will be loaded directly from
-        the local path, otherwise the huggingface cache will be checked. If the huggingface cache does not contain the
-        model, then the weights will be downloaded and stored into the huggingface cache
-    device_type: where to load the model
-    distributed_strategy: None, 'fsdp', 'hsdp', 'tp', or 'mp'.
-    checkpoint_sharding: how the checkpoint files are sharded: None, 'tp',
-                'fsdp', or 'layer'. If None, guess based on files.
-    group: ProcessGroup The PG to use for any model distribution
-    initialize_model_with_weights: bool
-        If True, will download the weights for the model and load them into the fms model. Otherwise the model will
-        simply be initialized without the weights.
+    Args:
+        model_id_or_path (Union[str, os.PathLike]): The huggingface hub model id or a local path.
+            If the local path exists, the model will be loaded directly from the local path, otherwise the
+            huggingface cache will be checked. If the huggingface cache does not contain the model, then the
+            weights will be downloaded and stored into the huggingface cache.
+        device_type (str): Where to load the model.
+        data_type (Optional[Union[str, torch.dtype]]): The data type to use for the model.
+        distributed_strategy (Optional[str]): The distributed strategy to use. Can be 'fsdp', 'hsdp', 'tp', or 'mp'.
+        checkpoint_sharding (Optional[str]): How the checkpoint files are sharded. Can be 'tp', 'fsdp', or 'layer'.
+            If None, guess based on files.
+        group (Optional[ProcessGroup]): The ProcessGroup to use for any model distribution.
+        initialize_model_with_weights (bool): If True, will download the weights for the model and load them into
+            the fms model. Otherwise the model will simply be initialized without the weights.
 
-    Returns
-    -------
-    nn.Module
-        an fms equivalent implementation of an HF model
+    Returns:
+        nn.Module: An FMS equivalent implementation of an HF model.
     """
     get_model_kwargs = _infer_model_configuration(
         model_id_or_path, download_weights=initialize_model_with_weights

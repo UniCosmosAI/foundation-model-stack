@@ -24,22 +24,15 @@ from fms.modules.tp import TPModule
 class FeedForwardBlock(nn.Module):
     """
     A two-layer, symmetric, fully-connected MLP structure.
-    ...
-    Args
-    ----
-    emb_dim : int
-        Dimensionality of input and output vectors.
-    hidden_grow_factor : float
-        Sets dimensionality of inner latent space (emb_dim * hidden_grow_factor)
-    multiple_of : Optional[int]
-        Ensure inner latent space is a multiple of this parameter if defined (useful for
-        TensorParallel as well as GPU kernel speed)
-    activation_fn : nn.Module
-        An activation function over torch.FloatTensors applied to inner latent space.
-    p_dropout : float|None
-        Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
-    use_bias : bool
-        Include bias terms in fully-connected sublayers?
+
+    Args:
+        emb_dim (int): Dimensionality of input and output vectors.
+        hidden_grow_factor (float): Sets dimensionality of inner latent space (emb_dim * hidden_grow_factor).
+        multiple_of (Optional[int]): Ensure inner latent space is a multiple of this parameter if defined.
+        activation_fn (nn.Module): An activation function over torch.FloatTensors applied to inner latent space.
+        p_dropout (float|None): Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
+        use_bias (bool): Include bias terms in fully-connected sublayers?
+        linear_config (Optional[Mapping[str, Any]]): Configuration for linear layers.
     """
 
     def __init__(
@@ -78,6 +71,9 @@ class FeedForwardBlock(nn.Module):
         self.linear_config = linear_config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the FeedForwardBlock.
+        """
         for layer in ["w1", "w2"]:
             nn.init.trunc_normal_(
                 getattr(self, layer).weight,
@@ -88,9 +84,27 @@ class FeedForwardBlock(nn.Module):
                 getattr(self, layer).bias.data.zero_()
 
     def to_tp(self, group: ProcessGroup) -> "TPFeedForwardBlock":
+        """
+        Converts the FeedForwardBlock to a TPFeedForwardBlock.
+
+        Args:
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPFeedForwardBlock: The TPFeedForwardBlock layer.
+        """
         return TPFeedForwardBlock.import_module(self, group)
 
     def forward(self, x):
+        """
+        Forward pass for the FeedForwardBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         out = self.a(self.w1(x))
         if self.p_dropout:
             out = self.d(out)
@@ -102,14 +116,15 @@ class TPFeedForwardBlock(FeedForwardBlock, TPModule):
     """
     A two-layer, symmetric, fully-connected MLP structure with Tensor Parallel support.
 
-    Args
-    ----
-    Check FeedForwardBlock for up-to-date docs
-
-    world_size: int
-        the number of processes running this model in TP
-    rank: int
-        the index of this process wrt to the rest running the model in TP
+    Args:
+        emb_dim (int): Dimensionality of input and output vectors.
+        hidden_grow_factor (float): Sets dimensionality of inner latent space.
+        multiple_of (Optional[int]): Ensure inner latent space is a multiple of this parameter.
+        activation_fn (nn.Module): An activation function.
+        p_dropout (float|None): Dropout probability.
+        use_bias (bool): Include bias terms in fully-connected sublayers?
+        group (Optional[ProcessGroup]): The process group for tensor parallelism.
+        linear_config (Optional[Mapping[str, Any]]): Configuration for linear layers.
     """
 
     def __init__(
@@ -150,8 +165,12 @@ class TPFeedForwardBlock(FeedForwardBlock, TPModule):
         self,
         tensor_values: dict[str, torch.Tensor],
     ) -> None:
-        """Define name of FFN modules to TP-shard, their name-to-module mapping,
+        """
+        Define name of FFN modules to TP-shard, their name-to-module mapping,
         per-module base sharding dimension, and per-module max partition size.
+
+        Args:
+            tensor_values (dict[str, torch.Tensor]): The tensor values to load.
         """
 
         # sharding modules struct: {'module_name': (module_obj, sharding_dim, max_partition)}
@@ -172,6 +191,16 @@ class TPFeedForwardBlock(FeedForwardBlock, TPModule):
     def import_module(
         ffb: FeedForwardBlock, group: ProcessGroup
     ) -> "TPFeedForwardBlock":
+        """
+        Imports a FeedForwardBlock module to a TPFeedForwardBlock module.
+
+        Args:
+            ffb (FeedForwardBlock): The FeedForwardBlock module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPFeedForwardBlock: The imported TPFeedForwardBlock module.
+        """
         tp_ffb = TPFeedForwardBlock(
             emb_dim=getattr(ffb.w1, "in_features"),
             hidden_grow_factor=ffb.hidden_dim / getattr(ffb.w1, "in_features"),
@@ -185,6 +214,15 @@ class TPFeedForwardBlock(FeedForwardBlock, TPModule):
         return tp_ffb
 
     def forward(self, x):
+        """
+        Forward pass for the TPFeedForwardBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         x_par = copy_to_tensor_model_parallel_region(x, self.group)
         out_par = FeedForwardBlock.forward(self, x_par)
         return reduce_from_tensor_model_parallel_region(out_par, self.group)
@@ -194,22 +232,16 @@ class GatedLinearUnit(nn.Module):
     """
     A two-point-five-layer, fully-connected gated linear MLP structure (GLU).
     Contains 50% extra params compared to FeedForwardBlock, adjust accordingly.
-    ...
-    Args
-    ----
-    emb_dim : int
-        Dimensionality of input and output vectors.
-    hidden_grow_factor : float
-        Sets dimensionality of inner latent space (emb_dim * hidden_grow_factor)
-    multiple_of : Optional[int]
-        Ensure inner latent space is a multiple of this parameter if defined (useful for
-        TensorParallel as well as GPU kernel speed)
-    activation_fn : nn.Module
-        An activation function over torch.FloatTensors applied to inner latent gates.
-    p_dropout : float|None
-        Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
-    use_bias : bool
-        Include bias terms in fully-connected sublayers?
+
+    Args:
+        emb_dim (int): Dimensionality of input and output vectors.
+        hidden_grow_factor (float): Sets dimensionality of inner latent space.
+        multiple_of (Optional[int]): Ensure inner latent space is a multiple of this parameter.
+        activation_fn (nn.Module): An activation function.
+        p_dropout (float|None): Dropout probability.
+        use_bias (bool): Include bias terms in fully-connected sublayers?
+        fused (bool): If True, the weights of the two linear layers will be fused.
+        linear_config (Optional[Mapping[str, Any]]): Configuration for linear layers.
     """
 
     def __init__(
@@ -267,6 +299,9 @@ class GatedLinearUnit(nn.Module):
         self.linear_config = linear_config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the GatedLinearUnit.
+        """
         layers = ["w2"]
         if self.fused:
             layers.append("wg1_fused")
@@ -283,9 +318,27 @@ class GatedLinearUnit(nn.Module):
                 getattr(self, layer).bias.data.zero_()
 
     def to_tp(self, group: ProcessGroup) -> "TPGatedLinearUnit":
+        """
+        Converts the GatedLinearUnit to a TPGatedLinearUnit.
+
+        Args:
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPGatedLinearUnit: The TPGatedLinearUnit layer.
+        """
         return TPGatedLinearUnit.import_module(self, group)
 
     def forward(self, x):
+        """
+        Forward pass for the GatedLinearUnit.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         if self.fused:
             out_fused = self.wg1_fused(x)
             wg, w1 = torch.split(out_fused, [self.hidden_dim, self.hidden_dim], dim=2)
@@ -297,6 +350,12 @@ class GatedLinearUnit(nn.Module):
         return self.w2(out)
 
     def _initialize_empty_module(self):
+        """
+        Initializes an empty GatedLinearUnit module.
+
+        Returns:
+            GatedLinearUnit: The empty GatedLinearUnit module.
+        """
         with torch.device("meta"):
             return GatedLinearUnit(
                 self.width,
@@ -309,6 +368,12 @@ class GatedLinearUnit(nn.Module):
             )
 
     def unfuse_weights(self):
+        """
+        Unfuses the weights of the GatedLinearUnit.
+
+        Returns:
+            GatedLinearUnit: The unfused GatedLinearUnit layer.
+        """
         result = self._initialize_empty_module()
         wg, w1 = torch.split(
             self.wg1_fused.weight, [self.hidden_dim, self.hidden_dim], dim=0
@@ -332,14 +397,16 @@ class TPGatedLinearUnit(GatedLinearUnit, TPModule):
     Contains 50% extra params compared to FeedForwardBlock, adjust accordingly.
     This subclass adds Tensor Parallel support.
 
-    Args
-    ----
-    Check GatedLinearUnit for up-to-date docs
-
-    world_size: int
-        the number of processes running this model in TP
-    rank: int
-        the index of this process wrt to the rest running the model in TP
+    Args:
+        emb_dim (int): Dimensionality of input and output vectors.
+        hidden_grow_factor (float): Sets dimensionality of inner latent space.
+        multiple_of (Optional[int]): Ensure inner latent space is a multiple of this parameter.
+        activation_fn (nn.Module): An activation function.
+        p_dropout (float|None): Dropout probability.
+        use_bias (bool): Include bias terms in fully-connected sublayers?
+        group (Optional[ProcessGroup]): The process group for tensor parallelism.
+        fused (bool): If True, the weights of the two linear layers will be fused.
+        linear_config (Optional[Mapping[str, Any]]): Configuration for linear layers.
     """
 
     def __init__(
@@ -380,7 +447,8 @@ class TPGatedLinearUnit(GatedLinearUnit, TPModule):
         self,
         tensor_values: dict[str, torch.Tensor],
     ) -> Optional[set]:
-        """Define sharding info of GLU module as:
+        """
+        Define sharding info of GLU module as:
         {'module_name': (module_obj, sharding_dim, max_partition)}
         Then, call the pre-registered sharding function associated with
         self.linear_type.
@@ -391,7 +459,10 @@ class TPGatedLinearUnit(GatedLinearUnit, TPModule):
 
         The numbers in `max_partition` signify the largest world size
         till we need to duplicate. For instance if we have nheads=16 and
-        world_size=32, then first 2 ranks will get first 1/16th of query
+        world_size=32, then first 2 ranks will get first 1/16th of query.
+
+        Args:
+            tensor_values (dict[str, torch.Tensor]): The tensor values to load.
         """
 
         # sharding modules struct: {'module_name': (module_obj, sharding_dim, max_partition)}
@@ -423,6 +494,16 @@ class TPGatedLinearUnit(GatedLinearUnit, TPModule):
 
     @staticmethod
     def import_module(glu: GatedLinearUnit, group: ProcessGroup) -> "TPGatedLinearUnit":
+        """
+        Imports a GatedLinearUnit module to a TPGatedLinearUnit module.
+
+        Args:
+            glu (GatedLinearUnit): The GatedLinearUnit module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPGatedLinearUnit: The imported TPGatedLinearUnit module.
+        """
         tp_glu = TPGatedLinearUnit(
             emb_dim=glu.width,
             hidden_grow_factor=glu.hidden_dim / glu.width,
@@ -438,11 +519,26 @@ class TPGatedLinearUnit(GatedLinearUnit, TPModule):
         return tp_glu
 
     def forward(self, x):
+        """
+        Forward pass for the TPGatedLinearUnit.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         x_par = copy_to_tensor_model_parallel_region(x, self.group)
         out_par = GatedLinearUnit.forward(self, x_par)
         return reduce_from_tensor_model_parallel_region(out_par, self.group)
 
     def _initialize_empty_module(self):
+        """
+        Initializes an empty TPGatedLinearUnit module.
+
+        Returns:
+            TPGatedLinearUnit: The empty TPGatedLinearUnit module.
+        """
         return TPGatedLinearUnit(
             self.width,
             self.grow_factor * self.world_size,
@@ -460,14 +556,10 @@ class ConditionalFeedForward(nn.Module):
 
     For more information, see the review paper in https://arxiv.org/pdf/2209.01667.pdf
 
-    Args
-    ----
-    num_experts : int
-        The number of expert feed forward networks.
-    dim : int
-        The embedding dimension for the transformer model.
-    intermediate_size : int
-        The intermediate size for the expert networks.
+    Args:
+        num_experts (int): The number of expert feed forward networks.
+        dim (int): The embedding dimension for the transformer model.
+        intermediate_size (int): The intermediate size for the expert networks.
     """
 
     def __init__(self, num_experts: int, dim: int, intermediate_size: int):
@@ -479,6 +571,9 @@ class ConditionalFeedForward(nn.Module):
         self.w2 = nn.Parameter(torch.empty(num_experts, dim, intermediate_size))
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the ConditionalFeedForward layer.
+        """
         for param in ["w13", "w2"]:
             nn.init.trunc_normal_(
                 getattr(self, param),
@@ -487,9 +582,28 @@ class ConditionalFeedForward(nn.Module):
             )
 
     def to_tp(self, group: ProcessGroup) -> "TPConditionalFeedForward":
+        """
+        Converts the ConditionalFeedForward to a TPConditionalFeedForward.
+
+        Args:
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPConditionalFeedForward: The TPConditionalFeedForward layer.
+        """
         return TPConditionalFeedForward.import_module(self, group)
 
     def forward(self, x: torch.Tensor, expert_indices: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the ConditionalFeedForward layer.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            expert_indices (torch.Tensor): The indices of the experts to use.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # Check constraints.
         assert x.shape[1] == self.w13.shape[2], "Hidden size mismatch"
         assert x.is_contiguous(), "Hidden_states must be contiguous"
@@ -545,14 +659,11 @@ class TPConditionalFeedForward(ConditionalFeedForward, TPModule):
     This class represents the expert feed forward networks of an MoE FF layer.
     This subclass adds TP support.
 
-    Args
-    ----
-    num_experts : int
-        The number of expert feed forward networks.
-    dim : int
-        The embedding dimension for the transformer model.
-    intermediate_size : int
-        The intermediate size for the expert networks.
+    Args:
+        num_experts (int): The number of expert feed forward networks.
+        dim (int): The embedding dimension for the transformer model.
+        intermediate_size (int): The intermediate size for the expert networks.
+        group (Optional[ProcessGroup]): The process group for tensor parallelism.
     """
 
     def __init__(
@@ -580,6 +691,12 @@ class TPConditionalFeedForward(ConditionalFeedForward, TPModule):
         self,
         tensor_values: dict[str, torch.Tensor],
     ):
+        """
+        Loads the weights for the TPConditionalFeedForward layer.
+
+        Args:
+            tensor_values (dict[str, torch.Tensor]): The tensor values to load.
+        """
         # 1. Grab the weights from tensor_values
         used_keys: Set[str] = set()
         w13_weight = self._get_sd_weight(tensor_values, used_keys, ["w13"])
@@ -598,6 +715,16 @@ class TPConditionalFeedForward(ConditionalFeedForward, TPModule):
     def import_module(
         cff: ConditionalFeedForward, group: ProcessGroup
     ) -> "TPConditionalFeedForward":
+        """
+        Imports a ConditionalFeedForward module to a TPConditionalFeedForward module.
+
+        Args:
+            cff (ConditionalFeedForward): The ConditionalFeedForward module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPConditionalFeedForward: The imported TPConditionalFeedForward module.
+        """
         tp_cff = TPConditionalFeedForward(
             num_experts=cff.num_experts,
             dim=cff.dim,
@@ -608,6 +735,16 @@ class TPConditionalFeedForward(ConditionalFeedForward, TPModule):
         return tp_cff
 
     def forward(self, x, expert_indices):
+        """
+        Forward pass for the TPConditionalFeedForward layer.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            expert_indices (torch.Tensor): The indices of the experts to use.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         x_par = copy_to_tensor_model_parallel_region(x, self.group)
         out_par = ConditionalFeedForward.forward(self, x_par, expert_indices)
         return reduce_from_tensor_model_parallel_region(out_par, self.group)
@@ -622,16 +759,11 @@ class MOEFeedForward(nn.Module):
 
     For more information, see the review paper in https://arxiv.org/pdf/2209.01667.pdf
 
-    Args
-    ----
-    num_experts : int
-        The number of expert feed forward networks.
-    num_activated_experts : int
-        How many experts can be activated at any single time.
-    dim : int
-        The embedding dimension for the transformer model.
-    intermediate_size : int
-        The intermediate size for the expert networks.
+    Args:
+        num_experts (int): The number of expert feed forward networks.
+        num_activated_experts (int): How many experts can be activated at any single time.
+        dim (int): The embedding dimension for the transformer model.
+        intermediate_size (int): The intermediate size for the expert networks.
     """
 
     def __init__(
@@ -648,6 +780,9 @@ class MOEFeedForward(nn.Module):
         self.num_activated_experts = num_activated_experts
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the MOEFeedForward layer.
+        """
         nn.init.trunc_normal_(
             self.gate.weight,
             mean=0.0,
@@ -657,6 +792,15 @@ class MOEFeedForward(nn.Module):
         self.cond_ffn.reset_parameters()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the MOEFeedForward layer.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         B, S = x.shape[:2]
         x = x.view(-1, self.dim)
         # T = num_tokens, E = num_experts, D = hidden dim, A = activated experts

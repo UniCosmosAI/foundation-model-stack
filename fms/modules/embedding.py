@@ -18,23 +18,17 @@ class WordEmbedding(nn.Module):
     Input/output embedding layer for sequence models.
     Includes vocabulary and optional absolute positional encodings.
     Can optionally include output embeddings, to provide "reversed" output prediction logits.
-    ...
-    Args
-    ----
-    vocab_size : int
-        Length of vocabulary
-    emb_dim : int
-        Dimensionality of latent space
-    padding_idx : int|None
-        Padding token index in the vocabulary. Sets embedding for this token to zero since it is functionally inert.
-    max_pos : int
-        Maximum sequence length the model can handle. Sequences of shorter length are allowed and handled gracefully.
-    abs_pos : bool
-        Include absolute positional encodings?
-    reversible : bool
-        Include support for output logit prediction?
-    tie_weights : bool
-        If reversible: share input and output embeddings, or learn them separately?
+
+    Args:
+        vocab_size (int): Length of vocabulary.
+        emb_dim (int): Dimensionality of latent space.
+        padding_idx (int, optional): Padding token index in the vocabulary. Sets embedding for this token to zero.
+        max_pos (int): Maximum sequence length the model can handle.
+        abs_pos (bool): Include absolute positional encodings?
+        reversible (bool): Include support for output logit prediction?
+        tie_weights (bool): If reversible, share input and output embeddings, or learn them separately?
+        bias (bool): Include a bias term in the output head?
+        debug (bool): Enable debug assertions?
     """
 
     def __init__(
@@ -81,6 +75,9 @@ class WordEmbedding(nn.Module):
                 self.head.weight = self.emb.weight
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the embedding layer.
+        """
         # Defaults to norm-preserving in reverse op, unit vector in forward op
         layers = ["emb"]
         if self.abs_pos:
@@ -96,9 +93,28 @@ class WordEmbedding(nn.Module):
             self.emb.weight.data[self.padding_idx].zero_()
 
     def to_tp(self, group: ProcessGroup) -> "TPWordEmbedding":
+        """
+        Converts the WordEmbedding layer to a TPWordEmbedding layer.
+
+        Args:
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPWordEmbedding: The TPWordEmbedding layer.
+        """
         return TPWordEmbedding.import_module(self, group)
 
     def forward(self, inp, reverse=False):
+        """
+        Forward pass for the embedding layer.
+
+        Args:
+            inp (torch.Tensor): The input tensor.
+            reverse (bool): If True, compute output logits. Otherwise, compute input embeddings.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # If reverse is False, compute input embeddings. If reverse is True, compute output logits.
         # vocab_idx: b n d if reverse, else b n
         if not reverse:
@@ -129,18 +145,19 @@ class WordEmbedding(nn.Module):
 
 class TPWordEmbedding(WordEmbedding, TPModule):
     """
-    Input/output embedding layer for sequence models.
-    Includes vocabulary and optional absolute positional encodings.
-    Can optionally include output embeddings, to provide "reversed" output prediction logits.
-    ...
-    Args
-    ----
-    Check WordEmbedding for up-to-date docs
+    Input/output embedding layer for sequence models with tensor parallelism.
 
-    world_size: int
-        the number of processes running this model in TP
-    rank: int
-        the index of this process wrt to the rest running the model in TP
+    Args:
+        vocab_size (int): Length of vocabulary.
+        emb_dim (int): Dimensionality of latent space.
+        padding_idx (int, optional): Padding token index in the vocabulary.
+        max_pos (int): Maximum sequence length the model can handle.
+        abs_pos (bool): Include absolute positional encodings?
+        reversible (bool): Include support for output logit prediction?
+        tie_weights (bool): If reversible, share input and output embeddings?
+        bias (bool): Include a bias term in the output head?
+        debug (bool): Enable debug assertions?
+        group (ProcessGroup, optional): The process group for tensor parallelism.
     """
 
     def __init__(
@@ -200,6 +217,16 @@ class TPWordEmbedding(WordEmbedding, TPModule):
 
     @staticmethod
     def import_module(we: WordEmbedding, group: ProcessGroup) -> "TPWordEmbedding":
+        """
+        Imports a WordEmbedding module to a TPWordEmbedding module.
+
+        Args:
+            we (WordEmbedding): The WordEmbedding module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPWordEmbedding: The imported TPWordEmbedding module.
+        """
         tp_we = TPWordEmbedding(
             vocab_size=we.vocab_size,
             emb_dim=we.emb_dim,
@@ -218,6 +245,12 @@ class TPWordEmbedding(WordEmbedding, TPModule):
         self,
         tensor_values: Dict[str, torch.Tensor],
     ):
+        """
+        Loads the weights for the TPWordEmbedding layer.
+
+        Args:
+            tensor_values (Dict[str, torch.Tensor]): The tensor values to load.
+        """
         # 1. Grab the weights from tensor_values
         used_keys: Set[str] = set()
         weight_count = 1
@@ -251,6 +284,16 @@ class TPWordEmbedding(WordEmbedding, TPModule):
                 self.sharded_copy(self.head.bias, head_bias, 0, [self.world_size])
 
     def forward(self, inp, reverse=False):
+        """
+        Forward pass for the TPWordEmbedding layer.
+
+        Args:
+            inp (torch.Tensor): The input tensor.
+            reverse (bool): If True, compute output logits. Otherwise, compute input embeddings.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # If reverse is False, compute input embeddings. If reverse is True, compute output logits.
         # vocab_idx: b n d if reverse, else b n
         inp_par = copy_to_tensor_model_parallel_region(inp, self.group)
@@ -263,18 +306,15 @@ class TPWordEmbedding(WordEmbedding, TPModule):
 
 class TPEmbedding(nn.Embedding, TPModule):
     """
-    Input embedding layer for sequence models. Not to be confused with TPWordEmbedding.
+    Input embedding layer for sequence models with tensor parallelism. Not to be confused with TPWordEmbedding.
     (TP)WordEmbedding supports fusing together the LM Head and the input Embedding, while
     this is a class for when you want them separate, like in headless models.
 
-    Args
-    ----
-    Check nn.Embedding for up-to-date docs
-
-    world_size: int
-        the number of processes running this model in TP
-    rank: int
-        the index of this process wrt to the rest running the model in TP
+    Args:
+        num_embeddings (int): The number of embeddings.
+        embedding_dim (int): The embedding dimension.
+        group (ProcessGroup, optional): The process group for tensor parallelism.
+        **kwargs: Additional keyword arguments for nn.Embedding.
     """
 
     def __init__(
@@ -297,6 +337,16 @@ class TPEmbedding(nn.Embedding, TPModule):
 
     @staticmethod
     def import_module(e: nn.Embedding, group: ProcessGroup) -> "TPEmbedding":
+        """
+        Imports an nn.Embedding module to a TPEmbedding module.
+
+        Args:
+            e (nn.Embedding): The nn.Embedding module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPEmbedding: The imported TPEmbedding module.
+        """
         tp_e = TPEmbedding(
             num_embeddings=e.num_embeddings,
             embedding_dim=e.embedding_dim,
@@ -316,6 +366,12 @@ class TPEmbedding(nn.Embedding, TPModule):
         self,
         tensor_values: Dict[str, torch.Tensor],
     ):
+        """
+        Loads the weights for the TPEmbedding layer.
+
+        Args:
+            tensor_values (Dict[str, torch.Tensor]): The tensor values to load.
+        """
         # 1. Grab the weights from tensor_values
         used_keys: Set[str] = set()
         emb_weight = self._get_sd_weight(tensor_values, used_keys, ["weight"])
@@ -329,6 +385,15 @@ class TPEmbedding(nn.Embedding, TPModule):
         self.sharded_copy(self.weight, emb_weight, 1, [self.world_size])
 
     def forward(self, inp: torch.Tensor):
+        """
+        Forward pass for the TPEmbedding layer.
+
+        Args:
+            inp (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # vocab_idx: b n d if reverse, else b n
         inp_par = copy_to_tensor_model_parallel_region(inp, self.group)
         out_par = nn.Embedding.forward(self, inp_par)

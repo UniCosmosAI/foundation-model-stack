@@ -8,12 +8,26 @@ import torch.distributed as dist
 
 
 def _get_tpd_module(module: nn.Module, attr_name: str):
+    """
+    Get a module from a parent module by attribute name.
+
+    Args:
+        module (nn.Module): The parent module.
+        attr_name (str): The name of the attribute to get.
+
+    Returns:
+        nn.Module: The requested module.
+    """
     if attr_name == "self":
         return module
     return getattr(module, attr_name)
 
 
 class ShardType(Enum):
+    """
+    The type of sharding to perform.
+    """
+
     SHARD = 1
     RANK0 = 2
     CLONE = 3
@@ -27,7 +41,6 @@ class TPModule(nn.Module, metaclass=ABCMeta):
     list_embedding_weights, and import_module for their relevant weights.
     Finally, the module must call setup_tp at the end of their __init__
     function. See examples in attention.py, feedforward.py and embedding.py
-
     """
 
     rank: int
@@ -35,6 +48,13 @@ class TPModule(nn.Module, metaclass=ABCMeta):
     group: dist.ProcessGroup
 
     def setup_tp(self, rank: int, group: Optional[dist.ProcessGroup]) -> None:
+        """
+        Set up the tensor parallel module.
+
+        Args:
+            rank (int): The rank of the current process.
+            group (Optional[dist.ProcessGroup]): The process group for tensor parallelism.
+        """
         self.rank = rank
         if group is not None:
             self.group = group
@@ -50,6 +70,17 @@ class TPModule(nn.Module, metaclass=ABCMeta):
         output_size_per_partition,
         max_partition_sizes,
     ):
+        """
+        Get the tensor parallel slices for a given input size.
+
+        Args:
+            input_size (int): The size of the input tensor.
+            output_size_per_partition (int): The size of the output tensor per partition.
+            max_partition_sizes (List[int]): The maximum partition sizes.
+
+        Yields:
+            slice: The tensor parallel slice.
+        """
         cusum_max_partition_sizes = [0]
         min_partition_size = min(max_partition_sizes)
         for m in max_partition_sizes:
@@ -88,35 +119,12 @@ class TPModule(nn.Module, metaclass=ABCMeta):
         This function copies the correct shard of the weights for a rowwise-TP'd module
         according to the rank of the process and the world_size.
 
-        Args
-        ====
-        param: torch.nn.Parameter
-            Parameter that has had TP applied
-        tensor_value: torch.Tensor
-            tensor that needs sharding
-        dim: int
-            Dimension on which to shard. colwise sharding is usually dim 0, rowwise is usually dim 1
-        is_sharded: bool
-            For additive terms (like bias), is_sharded might be False. Otherwise True.
-        max_partition_sizes: List[int]
-            for each number in the list, if world_size is smaller than or equal to that number, the tensor will get
-            partitioned in worldsize parts, else if world size is larger than the number then you will get world size parts
-            replicated in worldsize / number
-
-            world_size = 4, max_partition_sizes = [8], tensor = [0 1 2 3 4 5 6 7]
-            [0 1] [2 3] [4 5] [6 7]
-
-            world_size = 8, max_partition_sizes = [4], tensor = [0 1 2 3 4 5 6 7]
-            [0 1] [0 1] [2 3] [2 3] [4 5] [4 5] [6 7] [6 7]
-
-            If there are multiple numbers in the max_partition_sizes list, then the param gets filled with non-contiguous
-            slices of the tensor_value. This is useful for fused weight cases (qkv, mlp, moe, etc.)
-
-            world_size = 4, max_partition_sizes = [4, 4], tensor = [0 1 2 3 4 5 6 7]
-            [0 4] [1 5] [2 6] [3 7]
-
-            world_size = 4, max_partition_sizes = [4, 1], tensor = [0 1 2 3 4 5 6 7 8 9]
-            [0 1 8 9] [2 3 8 9] [4 5 8 9] [6 7 8 9]
+        Args:
+            param (Union[torch.nn.Parameter, torch.Tensor]): Parameter that has had TP applied.
+            tensor_value (torch.Tensor): Tensor that needs sharding.
+            dim (int): Dimension on which to shard. colwise sharding is usually dim 0, rowwise is usually dim 1.
+            max_partition_sizes (List[int]): For each number in the list, if world_size is smaller than or equal to that number, the tensor will get partitioned in worldsize parts, else if world size is larger than the number then you will get world size parts replicated in worldsize / number.
+            shard_type (ShardType): The type of sharding to perform.
         """
         if shard_type == ShardType.SHARD:
             # In the case where world size is larger than any of the partition sizes, we must add replication up til the
@@ -155,8 +163,17 @@ class TPModule(nn.Module, metaclass=ABCMeta):
         used_keys: Set[str],
         substr_matches: List[str],
     ):
-        """Extract from partial model state_dict, the tensor
+        """
+        Extract from partial model state_dict, the tensor
         uniquely identified by the matching substrings provided.
+
+        Args:
+            state_dict (Dict[str, torch.Tensor]): The state dictionary.
+            used_keys (Set[str]): A set of used keys.
+            substr_matches (List[str]): A list of substrings to match.
+
+        Returns:
+            torch.Tensor: The extracted tensor.
         """
         results = []
         for k in state_dict:
@@ -183,7 +200,8 @@ class TPModule(nn.Module, metaclass=ABCMeta):
         self,
         tensor_values: Dict[str, torch.Tensor],
     ):
-        """Load all tensor values into a TP module.
+        """
+        Load all tensor values into a TP module.
 
         Override this method to load weights into a TP module. You can see
         examples for all TP modules in FMS, but the functions will generally
@@ -204,12 +222,18 @@ class TPModule(nn.Module, metaclass=ABCMeta):
         weights in a single parameter).
 
         Args:
-            tensor_values: Dict[str, torch.Tensor]
-                a state dict containing all the weights for a TP module
+            tensor_values (Dict[str, torch.Tensor]): a state dict containing all the weights for a TP module.
         """
         pass
 
     @staticmethod
     @abstractmethod
     def import_module(module, group: dist.ProcessGroup):
+        """
+        Import a module to a TP module.
+
+        Args:
+            module (nn.Module): The module to import.
+            group (dist.ProcessGroup): The process group for tensor parallelism.
+        """
         pass

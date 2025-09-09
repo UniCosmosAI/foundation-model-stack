@@ -13,11 +13,16 @@ __type_sharding_map: dict[str, Callable] = {}
 
 
 def register_linear_type_to_module_map(linear_type: str, factory: Callable) -> None:
-    """Registration of a linear type (e.g., "gptq") and associated module / module
+    """
+    Registration of a linear type (e.g., "gptq") and associated module / module
     factory function.
     Registered module will be made available at the time a model is built, to be
     instantiated by `get_linear`.
     This function can be called from other scripts to register custom modules.
+
+    Args:
+        linear_type (str): The linear type to register.
+        factory (Callable): The factory function to create the module.
     """
     if linear_type in __type_factory_map:
         raise KeyError(
@@ -27,12 +32,17 @@ def register_linear_type_to_module_map(linear_type: str, factory: Callable) -> N
 
 
 def register_linear_type_to_sharding_map(linear_type: str, factory: Callable) -> None:
-    """Registration of a linear type (e.g., "gptq") and associated Tensor Parallel (TP)
+    """
+    Registration of a linear type (e.g., "gptq") and associated Tensor Parallel (TP)
     sharding function (e.g., `shard_gptq_linear`).
     The sharding function determines how the parameters of a module are to be sharded
     with TP.
     This function can be called from other scripts to register custom TP sharding
     functionalities.
+
+    Args:
+        linear_type (str): The linear type to register.
+        factory (Callable): The factory function to create the sharding map.
     """
     if linear_type in __type_sharding_map:
         raise KeyError(
@@ -42,8 +52,12 @@ def register_linear_type_to_sharding_map(linear_type: str, factory: Callable) ->
 
 
 def get_all_linear_type_to_sharding_maps() -> dict[str, Callable]:
-    """Return all currently registered mappings from linear types to TP sharding
+    """
+    Return all currently registered mappings from linear types to TP sharding
     functions.
+
+    Returns:
+        dict[str, Callable]: A dictionary mapping linear types to sharding functions.
     """
     return __type_sharding_map
 
@@ -51,12 +65,20 @@ def get_all_linear_type_to_sharding_maps() -> dict[str, Callable]:
 def get_linear_type(
     linear_config: Optional[Mapping[str, Any]], module_name: Optional[str] = None
 ) -> str:
-    """Parse linear configuration mapping to extract selected linear type from
+    """
+    Parse linear configuration mapping to extract selected linear type from
     `linear_config['linear_type']`.
     `linear_type` can be string, callable, or None. Callable is a user-provided function
     to select linear type based on module name. It should return string or None.
     When no configuration is provided or linear type is None, we default to
     "torch_linear" type, which maps to torch.nn.Linear.
+
+    Args:
+        linear_config (Optional[Mapping[str, Any]]): The linear configuration.
+        module_name (Optional[str]): The name of the module.
+
+    Returns:
+        str: The linear type.
     """
     if not linear_config:
         return "torch_linear"
@@ -103,6 +125,16 @@ def get_linear_type(
 
 
 class UninitializedLinear(UninitializedModule):
+    """
+    An uninitialized linear layer.
+
+    Args:
+        in_features (int): The number of input features.
+        out_features (int): The number of output features.
+        bias (bool): Whether to include a bias term.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layer.
+    """
+
     def __init__(self, in_features, out_features, bias, linear_config):
         super().__init__()
         self.in_features = in_features
@@ -111,6 +143,15 @@ class UninitializedLinear(UninitializedModule):
         self.linear_config = linear_config
 
     def initialize(self, name):
+        """
+        Initializes the linear layer.
+
+        Args:
+            name (str): The name of the module.
+
+        Returns:
+            nn.Module: The initialized linear layer.
+        """
         return get_linear(
             self.in_features, self.out_features, self.bias, self.linear_config, name
         )
@@ -123,7 +164,8 @@ def get_linear(
     linear_config: Optional[Mapping[str, Any]] = None,
     module_name: Optional[str] = None,
 ) -> nn.Module:
-    """Return linear module or module factory function of selected type.
+    """
+    Return linear module or module factory function of selected type.
     Linear type is extracted from provided configuration (`linear_config`) and
     associated module is determined from existing mapping (`__type_factory_map`).
     Selected module must have been registered with `register_linear_type_to_module_map`.
@@ -132,6 +174,16 @@ def get_linear(
     linear_config["linear_type"] will be a callable. In this case, `get_linear` first
     returns UninitializedLinear, such that a post-processing loop with access to all the
     module names can determine the correct module to instantiate.
+
+    Args:
+        in_features (int): The number of input features.
+        out_features (int): The number of output features.
+        bias (bool): Whether to include a bias term.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layer.
+        module_name (Optional[str]): The name of the module.
+
+    Returns:
+        nn.Module: The linear layer.
     """
     if (
         linear_config
@@ -158,6 +210,15 @@ def get_linear(
 
 @dataclass
 class LinearModuleShardingInfo:
+    """
+    Information about how to shard a linear module.
+
+    Attributes:
+        linear_module (torch.nn.Module): The linear module to shard.
+        sharding_dim (int): The dimension to shard on.
+        max_partitions (list[int]): The maximum number of partitions for each dimension.
+    """
+
     linear_module: torch.nn.Module
     sharding_dim: int
     max_partitions: list[int]
@@ -165,6 +226,14 @@ class LinearModuleShardingInfo:
 
 @dataclass
 class LinearParameterShardingInfo:
+    """
+    Information about how to shard a linear parameter.
+
+    Attributes:
+        sharding_dim (int): The dimension to shard on.
+        shard_type (ShardType): The type of sharding to perform.
+    """
+
     sharding_dim: int
     shard_type: ShardType
 
@@ -175,10 +244,20 @@ def shard_base_linear(
     module_sharding_info: dict[str, LinearModuleShardingInfo],
     param_sharding_info: dict[str, dict[str, LinearParameterShardingInfo]],
 ) -> Optional[set]:
-    """Base Tensor Parallel (TP) sharding function for linear layers.
+    """
+    Base Tensor Parallel (TP) sharding function for linear layers.
     Using a dictionary of parameter names and unsharded tensors (`tensor_values`),
     and a TP-enabled module (`tp_module`), this function copies the correct shard
     from each tensor into the corresponding sharded module parameter.
+
+    Args:
+        tensor_values (dict[str, torch.Tensor]): A dictionary of tensor values.
+        tp_module (TPModule): The TP-enabled module.
+        module_sharding_info (dict[str, LinearModuleShardingInfo]): Information about how to shard the modules.
+        param_sharding_info (dict[str, dict[str, LinearParameterShardingInfo]]): Information about how to shard the parameters.
+
+    Returns:
+        Optional[set]: The set of unused keys.
     """
     all_params: dict = {}
     used_keys: set[str] = set()
@@ -218,14 +297,15 @@ def shard_torch_linear(
     module_sharding_info: dict[str, LinearModuleShardingInfo],
 ) -> Optional[set]:
     """
-                         |     GPU     |
-    sharding  | param    | shard | dim |
-    ----------+----------+-------+-----|
-    colwise   | weight   |   Y   |  0  |
-              | bias     |   Y   |  0  |
-    ----------+----------+-------+-----|
-    rowwise   | weight   |   Y   |  1  |
-              | bias     |   0   |  -  |
+    Shards a torch.nn.Linear layer for tensor parallelism.
+
+    Args:
+        tensor_values (dict[str, torch.Tensor]): A dictionary of tensor values.
+        tp_module (TPModule): The TP-enabled module.
+        module_sharding_info (dict[str, LinearModuleShardingInfo]): Information about how to shard the modules.
+
+    Returns:
+        Optional[set]: The set of unused keys.
     """
     param_sharding_info: dict[str, dict[str, LinearParameterShardingInfo]] = {}
     for module_name, module_info in module_sharding_info.items():

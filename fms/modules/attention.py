@@ -44,8 +44,8 @@ class AttentionKwargs(TypedDict, total=False):
     """
     The attention kwargs to be passed to fms model forward.
 
-    attn_name: str
-        this is the name corresponding to the attention op registered in register_attention_op
+    Attributes:
+        attn_name (str): This is the name corresponding to the attention op registered in register_attention_op.
     """
 
     attn_name: str
@@ -106,34 +106,17 @@ def register_attention_op(
         ]
     ] = None,
 ) -> None:
-    """Register a custom attention operation to be used within MultiHeadAttention. This method also provides the ability to register other useful constructs related to the attention type.
+    """
+    Register a custom attention operation to be used within MultiHeadAttention. This method also provides the ability to register other useful constructs related to the attention type.
 
     Args:
-        attn_type: str
-            the name for the attention_op. This should correspond directly to the AttentionKwargs implementation
-        store_op: Callable[[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor], Unpack["AttentionKwargs"]], Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]
-            This function has the following contract (keys, values, key_cache, value_cache, **attn_kwargs) -> (keys_compute, values_compute, keys_return, values_return). The intention
-            of this function is to provide a method of storing the keys in the key_cache and the values in the value_cache. The return of this method will include what keys/values to compute
-            on as well as what keys/values to return from MultiHeadAttention. Note: Reason for keeping these separate is that in some cases the keys to compute will be different than those
-            that are to be returned from MultiHeadAttention. For example, in Paged Attention, we may use sdpa as prefill (utilitizing the initial computed keys/values), but the returned cache
-            should be the larger cache that we stored to.
-        compute_op: Callable[[torch.Tensor, torch.Tensor, torch.Tensor, int, int, float, float, Unpack["AttentionKwargs"]], torch.Tensor]
-            This function has the following contract (query, key_cache, value_cache, nheads, kvheads, p_dropout, scale_factor, **attn_kwargs) -> (attn_output) --
-            query - b x qlen x h x ds, attn_output - b x qlen x h x ds. The intention of this function is perform attention computation. Note: the kv-cache may be very different in shape
-            depending on the type of attention
-        is_prefill_op: Optional[Callable[[Unpack["AttentionKwargs"]], bool]]
-            This function has the following contract (**attn_kwargs) -> bool. The intention of this function is to denote given the attention kwargs whether prefill or decode is being performed.
-            If prefill is being performed, the compute_op will be called, otherwise the compute_decode_op will be called. If set to None, this funcion will always return True.
-        compute_decode_op: Callable[[torch.Tensor, torch.Tensor, torch.Tensor, int, int, float, float, Unpack["AttentionKwargs"]], torch.Tensor]
-            This function has the following contract (query, key_cache, value_cache, nheads, kvheads, p_dropout, scale_factor, **attn_kwargs) -> (attn_output) --
-            query - b x qlen x h x ds, attn_output - b x qlen x h x ds. The intention of this function to provide a separate attention computation for decode. If this is set to something other than
-            compute_op, is_prefill_op should also be provided. If set to None, this will default to the compute_op. Note: the kv-cache may be very different in shape depending on the type of attention
-        update_attn_kwargs_op: Optional[Callable[[Unpack["AttentionKwargs"]], "AttentionKwargs"]]
-            This function has the following contract (**attn_kwargs) -> updated_attn_kwargs. The intention of this function is to act as a helper to update the attn_kwargs between each step within a
-            generation loop. If set to None, will return the attn_kwargs with no changes.
-        validate_attn_kwargs_op: Optional[Callable[[torch.Tensor, torch.Tensor, Optional[List[Tuple[torch.Tensor, torch.Tensor]]], Unpack["AttentionKwargs"]], None]]
-            This function has the following contract (input_ids, position_ids, past_key_value_states, **attn_kwargs) -> None. The intention of this function is do further validation against the
-            attn_kwargs for a given forward pass. If set to None, this function will perform no extra validation.
+        attn_type (str): The name for the attention_op. This should correspond directly to the AttentionKwargs implementation.
+        store_op (Callable): This function has the following contract (keys, values, key_cache, value_cache, **attn_kwargs) -> (keys_compute, values_compute, keys_return, values_return). The intention of this function is to provide a method of storing the keys in the key_cache and the values in the value_cache. The return of this method will include what keys/values to compute on as well as what keys/values to return from MultiHeadAttention. Note: Reason for keeping these separate is that in some cases the keys to compute will be different than those that are to be returned from MultiHeadAttention. For example, in Paged Attention, we may use sdpa as prefill (utilitizing the initial computed keys/values), but the returned cache should be the larger cache that we stored to.
+        compute_op (Callable): This function has the following contract (query, key_cache, value_cache, nheads, kvheads, p_dropout, scale_factor, **attn_kwargs) -> (attn_output) -- query - b x qlen x h x ds, attn_output - b x qlen x h x ds. The intention of this function is perform attention computation. Note: the kv-cache may be very different in shape depending on the type of attention.
+        is_prefill_op (Optional[Callable]): This function has the following contract (**attn_kwargs) -> bool. The intention of this function is to denote given the attention kwargs whether prefill or decode is being performed. If prefill is being performed, the compute_op will be called, otherwise the compute_decode_op will be called. If set to None, this funcion will always return True.
+        compute_decode_op (Callable): This function has the following contract (query, key_cache, value_cache, nheads, kvheads, p_dropout, scale_factor, **attn_kwargs) -> (attn_output) -- query - b x qlen x h x ds, attn_output - b x qlen x h x ds. The intention of this function to provide a separate attention computation for decode. If this is set to something other than compute_op, is_prefill_op should also be provided. If set to None, this will default to the compute_op. Note: the kv-cache may be very different in shape depending on the type of attention.
+        update_attn_kwargs_op (Optional[Callable]): This function has the following contract (**attn_kwargs) -> updated_attn_kwargs. The intention of this function is to act as a helper to update the attn_kwargs between each step within a generation loop. If set to None, will return the attn_kwargs with no changes.
+        validate_attn_kwargs_op (Optional[Callable]): This function has the following contract (input_ids, position_ids, past_key_value_states, **attn_kwargs) -> None. The intention of this function is do further validation against the attn_kwargs for a given forward pass. If set to None, this function will perform no extra validation.
     """
     if attn_type in __type_factory_map:
         raise KeyError(
@@ -158,6 +141,15 @@ def register_attention_op(
 
 
 class SDPAAttentionKwargs(AttentionKwargs):
+    """
+    The attention kwargs for the SDPA attention type.
+
+    Attributes:
+        mask (NotRequired[torch.Tensor]): The attention mask.
+        attn_algorithm (NotRequired[str]): The attention algorithm to use.
+        is_causal_mask (bool): Whether the mask is a causal mask.
+    """
+
     mask: NotRequired[torch.Tensor]
     attn_algorithm: NotRequired[str]
     is_causal_mask: bool
@@ -304,6 +296,15 @@ register_attention_op(
 
 
 def get_attention_type(**attn_kwargs: Unpack[AttentionKwargs]) -> dict[str, Callable]:
+    """
+    Get the attention type from the attention kwargs.
+
+    Args:
+        **attn_kwargs (Unpack[AttentionKwargs]): The attention kwargs.
+
+    Returns:
+        dict[str, Callable]: The attention type dictionary.
+    """
     attn_name = attn_kwargs.get("attn_name", "sdpa_causal")
     if attn_name not in __type_factory_map:
         # we can add sdpa default here
@@ -313,7 +314,18 @@ def get_attention_type(**attn_kwargs: Unpack[AttentionKwargs]) -> dict[str, Call
 
 
 class QKV(nn.Module, metaclass=abc.ABCMeta):
-    """Simple module for applying qkv in attention"""
+    """
+    Simple module for applying qkv in attention.
+
+    Args:
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of attention heads.
+        kvheads (int): The number of key-value heads.
+        emb_kq_per_head (int): The embedding dimension per head for key and query.
+        emb_v_per_head (int): The embedding dimension per head for value.
+        use_bias (bool): Whether to use bias.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+    """
 
     def __init__(
         self,
@@ -343,36 +355,39 @@ class QKV(nn.Module, metaclass=abc.ABCMeta):
         k: Optional[torch.Tensor],
         v: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """applies query/key/value transformations on q, k, v inputs respectively and returns the resulting values
+        """
+        Applies query/key/value transformations on q, k, v inputs respectively and returns the resulting values.
 
         Args:
-            q: torch.Tensor
-                the query tensor
-            k: Optional[torch.Tensor]
-                the optional key tensor
-            v: Optional[torch.Tensor]
-                the optional value tensor
+            q (torch.Tensor): The query tensor.
+            k (Optional[torch.Tensor]): The optional key tensor.
+            v (Optional[torch.Tensor]): The optional value tensor.
 
         Returns:
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-            the query, key, and value computed
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: The query, key, and value computed.
         """
         pass
 
     @abc.abstractmethod
     def reset_parameters(self):
-        """resets the query, key, and value weights for training
-
-        Args:
-            gain: int
-                gain for std in norm (default is 1)
+        """
+        Resets the query, key, and value weights for training.
         """
         pass
 
 
 class UnfusedQKV(QKV):
     """
-    Unfused Weights implementation of QKV
+    Unfused Weights implementation of QKV.
+
+    Args:
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of attention heads.
+        kvheads (int): The number of key-value heads.
+        emb_kq_per_head (int): The embedding dimension per head for key and query.
+        emb_v_per_head (int): The embedding dimension per head for value.
+        use_bias (bool): Whether to use bias.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
     """
 
     def __init__(
@@ -419,6 +434,9 @@ class UnfusedQKV(QKV):
         )
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the QKV layer.
+        """
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.trunc_normal_(m.weight, mean=0.0, std=0.02)
@@ -431,6 +449,17 @@ class UnfusedQKV(QKV):
         k: Optional[torch.Tensor],
         v: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Forward pass for the UnfusedQKV layer.
+
+        Args:
+            q (torch.Tensor): The query tensor.
+            k (Optional[torch.Tensor]): The optional key tensor.
+            v (Optional[torch.Tensor]): The optional value tensor.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: The query, key, and value tensors.
+        """
         if k is None and v is None:
             k = q
             v = q
@@ -448,7 +477,16 @@ class UnfusedQKV(QKV):
 
 class FusedQKV(QKV):
     """
-    Fused Weights implementation of QKV
+    Fused Weights implementation of QKV.
+
+    Args:
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of attention heads.
+        kvheads (int): The number of key-value heads.
+        emb_kq_per_head (int): The embedding dimension per head for key and query.
+        emb_v_per_head (int): The embedding dimension per head for value.
+        use_bias (bool): Whether to use bias.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
     """
 
     def __init__(
@@ -488,6 +526,12 @@ class FusedQKV(QKV):
         )
 
     def unfuse_weights(self):
+        """
+        Unfuses the weights of the QKV layer.
+
+        Returns:
+            UnfusedQKV: The unfused QKV layer.
+        """
         with torch.device("meta"):
             result = UnfusedQKV(
                 self.emb_dim,
@@ -511,6 +555,9 @@ class FusedQKV(QKV):
         return result
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the QKV layer.
+        """
         nn.init.trunc_normal_(self.qkv_fused.weight, mean=0.0, std=0.02)
         if self.use_bias:
             self.qkv_fused.bias.data.zero_()
@@ -521,6 +568,17 @@ class FusedQKV(QKV):
         k: Optional[torch.Tensor],
         v: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Forward pass for the FusedQKV layer.
+
+        Args:
+            q (torch.Tensor): The query tensor.
+            k (Optional[torch.Tensor]): The optional key tensor.
+            v (Optional[torch.Tensor]): The optional value tensor.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: The query, key, and value tensors.
+        """
         if (k is None and v is None) or (k is q and v is q):
             qkv = q
         else:
@@ -531,30 +589,22 @@ class FusedQKV(QKV):
 class MultiHeadAttention(nn.Module):
     """
     Performs multi-headed self- or cross-attention, with optional attention masking.
-    ...
-    Args
-    ----
-    emb_dim : int
-        Latent dimensionality of input and output tensors.
-    emb_kq : int
-        Latent dimensionality of each head in key and query projections (attention dimension).
-    emb_v : int
-        Latent dimensionality of each head in value projection (mixing dimension).
-    nheads : int
-        Number of attention heads.
-    p_dropout : float|None
-        Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
-    use_bias : bool
-        Include bias terms in fully-connected sublayers?
-    fused : bool
-        If True, qkv weights will be fused, otherwise qkv weights will be unfused.
-    linear_config : Mapping[str, Any] | None
-        Configuration for selection of linear modules (QKV, dense).
-        Pass as {"linear_type": [str | callable], <other kwargs>}.
-        "linear_type" should provide the string identifier of a registered type
-        (e.g., "torch_linear", "gptq", ...) or a callable for module selection depending
-        on module name. Additional config options should be provided as kwargs in
-        linear_config.
+
+    Args:
+        emb_dim (int): Latent dimensionality of input and output tensors.
+        emb_kq (int): Latent dimensionality of each head in key and query projections (attention dimension).
+        emb_v (int): Latent dimensionality of each head in value projection (mixing dimension).
+        nheads (int): Number of attention heads.
+        p_dropout (float|None): Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
+        use_bias (bool): Include bias terms in fully-connected sublayers?
+        fused (bool): If True, qkv weights will be fused, otherwise qkv weights will be unfused.
+        linear_config (Mapping[str, Any] | None): Configuration for selection of linear modules (QKV, dense).
+            Pass as {"linear_type": [str | callable], <other kwargs>}.
+            "linear_type" should provide the string identifier of a registered type
+            (e.g., "torch_linear", "gptq", ...) or a callable for module selection depending
+            on module name. Additional config options should be provided as kwargs in
+            linear_config.
+        scale_factor (Optional[float]): The factor to scale the attention scores by.
     """
 
     def __init__(
@@ -605,6 +655,9 @@ class MultiHeadAttention(nn.Module):
         self.position_encoder = position_encoder
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the MultiHeadAttention layer.
+        """
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.trunc_normal_(m.weight, mean=0.0, std=0.02)
@@ -614,6 +667,15 @@ class MultiHeadAttention(nn.Module):
                 m.reset_parameters()
 
     def to_tp(self, group: ProcessGroup) -> "TPMultiHeadAttention":
+        """
+        Converts the MultiHeadAttention layer to a Tensor-Parallel MultiHeadAttention layer.
+
+        Args:
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPMultiHeadAttention: The Tensor-Parallel MultiHeadAttention layer.
+        """
         return TPMultiHeadAttention.import_module(self, group)
 
     def forward(
@@ -627,19 +689,22 @@ class MultiHeadAttention(nn.Module):
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
         """
-        past_key_value_state: tuple
-            the cache to be used in attention of the form (<self/cross>_key, <self/cross>_value)
-        position_ids: Optional[torch.LongTensor]
-            The position of each of the tokens encoded in q and k. Used for RoPE embeddings
-        use_cache: bool
-            if True, the kv states for self/cross attention will be saved, otherwise they will not be saved
+        Forward pass for the MultiHeadAttention layer.
 
-        Returns
-        -------
-        tensor or tuple
-            If use_cache=False, only the hidden state will be returned as a tensor. If use_cache=True, a tuple will be
-            returned in the form (hidden_state, cache) where hidden_state is a tensor and cache is of the form specified
-            in past_key_value_state
+        Args:
+            q (torch.Tensor): The query tensor.
+            k (Optional[torch.Tensor]): The optional key tensor.
+            v (Optional[torch.Tensor]): The optional value tensor.
+            position_ids (Optional[torch.LongTensor]): The position of each of the tokens encoded in q and k. Used for RoPE embeddings.
+            past_key_value_state (Optional[Tuple[Tensor | None, Tensor | None]]): The cache to be used in attention of the form (<self/cross>_key, <self/cross>_value).
+            use_cache (bool): If True, the kv states for self/cross attention will be saved, otherwise they will not be saved.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[Tensor, Tensor]]]:
+                If use_cache=False, only the hidden state will be returned as a tensor. If use_cache=True, a tuple will be
+                returned in the form (hidden_state, cache) where hidden_state is a tensor and cache is of the form specified
+                in past_key_value_state.
         """
         # q, k, v: batch_size x seq_len x emb_dim
         # mask: batch_size x seq_len x seq_len
@@ -720,16 +785,21 @@ class MultiHeadAttention(nn.Module):
 class TPMultiHeadAttention(MultiHeadAttention, TPModule):
     """
     Performs multi-headed self- or cross-attention, with optional attention masking.
-    This subclass adds support for Tensor Parallel
-    ...
-    Args
-    ----
-    Check MultiHeadAttention for up-to-date docs
+    This subclass adds support for Tensor Parallel.
 
-    world_size: int
-        the number of processes running this model in TP
-    rank: int
-        the index of this process wrt to the rest running the model in TP
+    Args:
+        emb_dim (int): Latent dimensionality of input and output tensors.
+        emb_kq (int): Latent dimensionality of each head in key and query projections (attention dimension).
+        emb_v (int): Latent dimensionality of each head in value projection (mixing dimension).
+        nheads (int): Number of attention heads.
+        kvheads (int): Number of key-value heads.
+        p_dropout (float|None): Dropout probability. Must be in range [0,1]. If 0 or None, dropout will not be used.
+        use_bias (bool): Include bias terms in fully-connected sublayers?
+        position_encoder (Optional[PositionEncoder]): The position encoder to use.
+        fused (bool): If True, qkv weights will be fused, otherwise qkv weights will be unfused.
+        group (Optional[ProcessGroup]): The process group for tensor parallelism.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        scale_factor (Optional[float]): The factor to scale the attention scores by.
     """
 
     def __init__(
@@ -780,7 +850,8 @@ class TPMultiHeadAttention(MultiHeadAttention, TPModule):
         self,
         tensor_values: dict[str, torch.Tensor],
     ) -> Optional[set]:
-        """Define sharding info of MHA module as:
+        """
+        Define sharding info of MHA module as:
         {'module_name': (module_obj, sharding_dim, max_partition)}
         Then, call the pre-registered sharding function associated with
         self.linear_type.
@@ -791,7 +862,13 @@ class TPMultiHeadAttention(MultiHeadAttention, TPModule):
 
         The numbers in `max_partition` signify the largest world size
         till we need to duplicate. For instance if we have nheads=16 and
-        world_size=32, then first 2 ranks will get first 1/16th of query
+        world_size=32, then first 2 ranks will get first 1/16th of query.
+
+        Args:
+            tensor_values (dict[str, torch.Tensor]): The tensor values to load.
+
+        Returns:
+            Optional[set]: The set of unused keys.
         """
 
         if self.fused:
@@ -833,6 +910,16 @@ class TPMultiHeadAttention(MultiHeadAttention, TPModule):
     def import_module(
         mha: MultiHeadAttention, group: ProcessGroup
     ) -> "TPMultiHeadAttention":
+        """
+        Imports a MultiHeadAttention module to a TPMultiHeadAttention module.
+
+        Args:
+            mha (MultiHeadAttention): The MultiHeadAttention module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPMultiHeadAttention: The imported TPMultiHeadAttention module.
+        """
         tp_mha = TPMultiHeadAttention(
             emb_dim=mha.emb_dim,
             emb_kq=mha.emb_kq_per_head,
@@ -855,6 +942,17 @@ class TPMultiHeadAttention(MultiHeadAttention, TPModule):
         k: Optional[torch.Tensor] = None,
         v: Optional[torch.Tensor] = None,
     ):
+        """
+        Copies the input tensors to the tensor parallel region.
+
+        Args:
+            q (torch.Tensor): The query tensor.
+            k (Optional[torch.Tensor]): The key tensor.
+            v (Optional[torch.Tensor]): The value tensor.
+
+        Returns:
+            Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]: The copied tensors.
+        """
         if (k is None and v is None) or (k is q and v is q):
             q_par = copy_to_tensor_model_parallel_region(q, self.group)
             if self.fused:
@@ -881,7 +979,22 @@ class TPMultiHeadAttention(MultiHeadAttention, TPModule):
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
         """
-        Check MultiHeadAttention for up-to-date arguments and docs
+        Forward pass for the TPMultiHeadAttention layer.
+
+        Args:
+            q (torch.Tensor): The query tensor.
+            k (Optional[torch.Tensor]): The optional key tensor.
+            v (Optional[torch.Tensor]): The optional value tensor.
+            position_ids (Optional[torch.LongTensor]): The position of each of the tokens encoded in q and k. Used for RoPE embeddings.
+            past_key_value_state (Optional[Tuple[Tensor | None, Tensor | None]]): The cache to be used in attention of the form (<self/cross>_key, <self/cross>_value).
+            use_cache (bool): If True, the kv states for self/cross attention will be saved, otherwise they will not be saved.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[Tensor, Tensor]]]:
+                If use_cache=False, only the hidden state will be returned as a tensor. If use_cache=True, a tuple will be
+                returned in the form (hidden_state, cache) where hidden_state is a tensor and cache is of the form specified
+                in past_key_value_state.
         """
 
         q_par, k_par, v_par = self._copy_to_tp_region(q, k, v)

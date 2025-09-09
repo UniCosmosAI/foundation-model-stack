@@ -28,6 +28,28 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RoBERTaConfig(ModelConfig):
+    """
+    Configuration for the RoBERTa model.
+
+    Args:
+        src_vocab_size (int): The size of the source vocabulary.
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of attention heads.
+        nlayers (int): The number of layers in the model.
+        pad_id (int): The ID of the padding token.
+        hidden_grow_factor (float): The growth factor for the hidden layer in the feed-forward network.
+        activation_fn (str): The activation function to use.
+        classifier_activation_fn (str): The activation function to use in the classifier head.
+        max_pos (int): The maximum position embedding.
+        type_vocab_size (int): The size of the token type vocabulary.
+        p_dropout (float): The dropout probability.
+        multiquery_attn (bool): Whether to use multi-query attention.
+        norm_eps (float): The epsilon value for layer normalization.
+        tie_heads (bool): Whether to tie the embedding and output heads.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     src_vocab_size: int = 50265
     emb_dim: int = 768
     nheads: int = 12
@@ -48,12 +70,24 @@ class RoBERTaConfig(ModelConfig):
 
 @dataclass
 class RoBERTaQuestionAnsweringConfig(RoBERTaConfig):
-    """Model configuration of RoBERTa for Question-Answering downstream task"""
+    """
+    Model configuration of RoBERTa for Question-Answering downstream task.
+
+    Args:
+        num_classes (int): The number of classes for the classifier.
+    """
 
     num_classes: int = 2
 
 
 class RoBERTaBlock(nn.Module):
+    """
+    A single block of the RoBERTa model.
+
+    Args:
+        config (RoBERTaConfig): The configuration for the RoBERTa model.
+    """
+
     def __init__(self, config: RoBERTaConfig):
         super().__init__()
         self.config = config
@@ -90,6 +124,16 @@ class RoBERTaBlock(nn.Module):
         x: torch.Tensor,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the RoBERTaBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # first we do MHA
         residual = x
         # self attention
@@ -121,6 +165,14 @@ class RoBERTaBlock(nn.Module):
 
 
 class RoBERTaHeadless(nn.Module):
+    """
+    The RoBERTa model without the language model head.
+
+    Args:
+        config (RoBERTaConfig): The configuration for the RoBERTa model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+    """
+
     def __init__(
         self, config: RoBERTaConfig, distributed_strategy: DistributedStrategy
     ):
@@ -161,6 +213,9 @@ class RoBERTaHeadless(nn.Module):
             self.dropout = nn.Dropout(self.config.p_dropout)
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         for layer in ["embedding", "position_embedding"]:
             nn.init.normal_(
                 getattr(self, layer).weight,
@@ -180,6 +235,18 @@ class RoBERTaHeadless(nn.Module):
         token_type_ids: Optional[torch.Tensor] = None,
         **attn_kwargs: Unpack[SDPAAttentionKwargs],
     ):
+        """
+        Forward pass for the RoBERTaHeadless model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.Tensor]): The position IDs.
+            token_type_ids (Optional[torch.Tensor]): The token type IDs.
+            **attn_kwargs (Unpack[SDPAAttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # We will need this as a default as this will make the assumption that is_causal_mask=False (will not create a causal mask in sdpa)
         # If this was not provided, if attn_name is not given and no mask is given, we will end up with a causal mask
         attn_kwargs["attn_name"] = attn_kwargs.get("attn_name", "sdpa_bidirectional")
@@ -233,6 +300,15 @@ class RoBERTaHeadless(nn.Module):
 
 
 class RoBERTa(nn.Module):
+    """
+    The RoBERTa model.
+
+    Args:
+        config (Optional[RoBERTaConfig]): The configuration for the RoBERTa model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[RoBERTaConfig] = None,
@@ -276,6 +352,18 @@ class RoBERTa(nn.Module):
         token_type_ids: Optional[torch.Tensor] = None,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the RoBERTa model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.Tensor]): The position IDs.
+            token_type_ids (Optional[torch.Tensor]): The token type IDs.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x, position_ids=position_ids, **attn_kwargs
         )
@@ -293,12 +381,30 @@ class RoBERTa(nn.Module):
 
     @classmethod
     def from_config(cls, config: RoBERTaConfig) -> "RoBERTa":
+        """
+        Creates a RoBERTa model from a configuration object.
+
+        Args:
+            config (RoBERTaConfig): The configuration for the RoBERTa model.
+
+        Returns:
+            RoBERTa: The RoBERTa model.
+        """
         return cls(config)
 
     def get_config(self) -> RoBERTaConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            RoBERTaConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         self.base_model.reset_parameters()
         if self.config.tie_heads:
             self.classification_head.head.bias.data.zero_()
@@ -312,6 +418,9 @@ class RoBERTa(nn.Module):
             )
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as tying the embedding and output heads.
+        """
         # This function is called in `get_model` after the model is fully initalized
         # on the correct device
 
@@ -325,7 +434,14 @@ class RoBERTa(nn.Module):
 
 
 class RoBERTaForQuestionAnswering(nn.Module):
-    """Model architecture of RoBERTa for Question Answering downstream task"""
+    """
+    Model architecture of RoBERTa for Question Answering downstream task.
+
+    Args:
+        config (Optional[RoBERTaQuestionAnsweringConfig]): The configuration for the RoBERTa model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
 
     def __init__(
         self,
@@ -363,6 +479,18 @@ class RoBERTaForQuestionAnswering(nn.Module):
         token_type_ids: Optional[torch.Tensor] = None,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the RoBERTaForQuestionAnswering model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.Tensor]): The position IDs.
+            token_type_ids (Optional[torch.Tensor]): The token type IDs.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The start and end logits.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x, position_ids=position_ids, **attn_kwargs
         )
@@ -386,12 +514,30 @@ class RoBERTaForQuestionAnswering(nn.Module):
     def from_config(
         cls, config: RoBERTaQuestionAnsweringConfig
     ) -> "RoBERTaForQuestionAnswering":
+        """
+        Creates a RoBERTaForQuestionAnswering model from a configuration object.
+
+        Args:
+            config (RoBERTaQuestionAnsweringConfig): The configuration for the RoBERTaForQuestionAnswering model.
+
+        Returns:
+            RoBERTaForQuestionAnswering: The RoBERTaForQuestionAnswering model.
+        """
         return cls(config)
 
     def get_config(self) -> RoBERTaQuestionAnsweringConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            RoBERTaQuestionAnsweringConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         self.base_model.reset_parameters()
         self.qa_head.weight.data.normal_(
             0,
@@ -417,6 +563,16 @@ _architecture_name = "roberta"
 
 
 def _roberta_factory_factory(config):
+    """
+    A factory function that creates a factory function for a RoBERTa model with a given configuration.
+
+    Args:
+        config (RoBERTaConfig): The configuration for the RoBERTa model.
+
+    Returns:
+        Callable: A factory function that creates a RoBERTa model.
+    """
+
     def factory(**kwargs):
         return RoBERTa(config, **kwargs)
 
@@ -424,6 +580,16 @@ def _roberta_factory_factory(config):
 
 
 def _roberta_question_answering_factory_factory(config):
+    """
+    A factory function that creates a factory function for a RoBERTaForQuestionAnswering model with a given configuration.
+
+    Args:
+        config (RoBERTaQuestionAnsweringConfig): The configuration for the RoBERTaForQuestionAnswering model.
+
+    Returns:
+        Callable: A factory function that creates a RoBERTaForQuestionAnswering model.
+    """
+
     def factory(**kwargs):
         return RoBERTaForQuestionAnswering(config, **kwargs)
 
@@ -452,6 +618,17 @@ serialization.register_adapter_step(
 def _weight_fusion(
     input_sd: Mapping[str, Any], model_config: Optional[RoBERTaConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Performs weight fusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[RoBERTaConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -472,6 +649,16 @@ serialization.register_adapter_step(
 
 
 def _hf_to_fms_names(hf_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face RoBERTa state dictionary names to FMS RoBERTa state dictionary names.
+
+    Args:
+        hf_sd (Mapping[str, Any]): The Hugging Face state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The FMS state dictionary.
+    """
     replacements = [
         (r"^roberta.embeddings.word_embeddings.weight", "base_model.embedding.weight"),
         (

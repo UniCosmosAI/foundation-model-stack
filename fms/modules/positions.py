@@ -11,7 +11,6 @@ class PositionEncoder:
     Provides the ability to insert position-encoding logic into MHA.
     """
 
-    # Override to adjust the mask e.g. for Alibi
     def adjusted_mask(
         self,
         mask: Optional[torch.Tensor],
@@ -20,9 +19,21 @@ class PositionEncoder:
         past_kv_state: Optional[Tuple[torch.Tensor, torch.Tensor]],
         use_cache=False,
     ) -> Optional[torch.Tensor]:
+        """
+        Adjusts the attention mask.
+
+        Args:
+            mask (Optional[torch.Tensor]): The attention mask.
+            q (torch.Tensor): The query tensor.
+            k (torch.Tensor): The key tensor.
+            past_kv_state (Optional[Tuple[torch.Tensor, torch.Tensor]]): The past key-value state.
+            use_cache (bool): Whether to use the cache.
+
+        Returns:
+            Optional[torch.Tensor]: The adjusted attention mask.
+        """
         return mask
 
-    # Override to adjust q/k's e.g. for rotary embeddings
     def adjusted_qk(
         self,
         q: torch.Tensor,
@@ -31,21 +42,30 @@ class PositionEncoder:
         past_kv_state: Optional[Tuple[torch.Tensor | None, torch.Tensor | None]],
         use_cache=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Adjusts the query and key tensors.
+
+        Args:
+            q (torch.Tensor): The query tensor.
+            k (torch.Tensor): The key tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs.
+            past_kv_state (Optional[Tuple[torch.Tensor | None, torch.Tensor | None]]): The past key-value state.
+            use_cache (bool): Whether to use the cache.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The adjusted query and key tensors.
+        """
         return q, k
 
 
 class Alibi(PositionEncoder):
     """
     Attention Linear Bias layer for sequence models, as in https://arxiv.org/pdf/2108.12409.pdf.
-    ...
-    Args
-    ----
-    nheads : int
-        Number of attention heads (and thus position bias matrices)
-    max_scale : float
-        Maximum scaling factor. Defaults to 0.5 as in paper.
-    min_scale : float
-        Minimum scaling factor. Defaults to 2^-8 as in paper.
+
+    Args:
+        nheads (int): Number of attention heads (and thus position bias matrices).
+        max_scale (float): Maximum scaling factor. Defaults to 0.5 as in paper.
+        min_scale (float): Minimum scaling factor. Defaults to 2^-8 as in paper.
     """
 
     def __init__(self, nheads, max_scale=0.5, min_scale=1 / (2**8)):
@@ -68,6 +88,19 @@ class Alibi(PositionEncoder):
         past_kv_state: Optional[Tuple[torch.Tensor, torch.Tensor]],
         use_cache=False,
     ) -> Optional[torch.Tensor]:
+        """
+        Adjusts the attention mask with the ALiBi bias.
+
+        Args:
+            mask (Optional[torch.Tensor]): The attention mask.
+            q (torch.Tensor): The query tensor.
+            k (torch.Tensor): The key tensor.
+            past_kv_state (Optional[Tuple[torch.Tensor, torch.Tensor]]): The past key-value state.
+            use_cache (bool): Whether to use the cache.
+
+        Returns:
+            Optional[torch.Tensor]: The adjusted attention mask.
+        """
         qlen = q.size(1)
         klen = k.size(1)
 
@@ -101,6 +134,16 @@ class Alibi(PositionEncoder):
 
 
 class RopeNoScalingImpl:
+    """
+    RoPE implementation without scaling.
+
+    Args:
+        dim (int): The dimension of the embeddings.
+        ratio (float): The ratio for the geometric progression.
+        orig_max_seq_len (int): The original maximum sequence length.
+        scaling_info (dict): A dictionary of scaling information.
+    """
+
     def __init__(
         self,
         dim: int,
@@ -114,12 +157,41 @@ class RopeNoScalingImpl:
         self.scaling_info = scaling_info
 
     def get_alpha(self, current_max_seq_len: int) -> int:
+        """
+        Get the alpha value for scaling.
+
+        Args:
+            current_max_seq_len (int): The current maximum sequence length.
+
+        Returns:
+            int: The alpha value.
+        """
         return 1
 
     def scaled_max_seq_len(self, current_max_seq_len: int, alpha: int):
+        """
+        Get the scaled maximum sequence length.
+
+        Args:
+            current_max_seq_len (int): The current maximum sequence length.
+            alpha (int): The alpha value.
+
+        Returns:
+            int: The scaled maximum sequence length.
+        """
         return max(current_max_seq_len, self.orig_max_seq_len)
 
     def compute_scaled_freqs(self, device: str, alpha: int):
+        """
+        Compute the scaled frequencies.
+
+        Args:
+            device (str): The device to compute on.
+            alpha (int): The alpha value.
+
+        Returns:
+            torch.Tensor: The scaled frequencies.
+        """
         ratio = self.ratio
         dim = self.dim
 
@@ -131,6 +203,10 @@ class RopeNoScalingImpl:
 
 
 class RopeNtkScalingImpl(RopeNoScalingImpl):
+    """
+    NTK-aware scaled RoPE implementation.
+    """
+
     # NTK scaling.
     # https://arxiv.org/abs/2306.15595
     # https://www.reddit.com/r/LocalLLaMA/comments/14lz7j5/ntkaware_scaled_rope_allows_llama_models_to_have/
@@ -142,6 +218,15 @@ class RopeNtkScalingImpl(RopeNoScalingImpl):
     # 4, 8, ... as needed)
 
     def get_alpha(self, current_max_seq_len: int) -> int:
+        """
+        Get the alpha value for NTK-aware scaling.
+
+        Args:
+            current_max_seq_len (int): The current maximum sequence length.
+
+        Returns:
+            int: The alpha value.
+        """
         alpha = current_max_seq_len / self.orig_max_seq_len
         alpha = math.ceil(alpha)
         # for some reason math.log2 didn't `torch.compile` but
@@ -153,9 +238,29 @@ class RopeNtkScalingImpl(RopeNoScalingImpl):
         return alpha
 
     def scaled_max_seq_len(self, current_max_seq_len: int, alpha: int):
+        """
+        Get the scaled maximum sequence length for NTK-aware scaling.
+
+        Args:
+            current_max_seq_len (int): The current maximum sequence length.
+            alpha (int): The alpha value.
+
+        Returns:
+            int: The scaled maximum sequence length.
+        """
         return max(current_max_seq_len, self.orig_max_seq_len * alpha)
 
     def compute_scaled_freqs(self, device: str, alpha: int):
+        """
+        Compute the scaled frequencies for NTK-aware scaling.
+
+        Args:
+            device (str): The device to compute on.
+            alpha (int): The alpha value.
+
+        Returns:
+            torch.Tensor: The scaled frequencies.
+        """
         dim = self.dim
         ratio = self.ratio * alpha ** (dim / (dim - 2))
 
@@ -167,7 +272,21 @@ class RopeNtkScalingImpl(RopeNoScalingImpl):
 
 
 class RopeLlama3ScalingImpl(RopeNoScalingImpl):
+    """
+    Llama3-style scaled RoPE implementation.
+    """
+
     def compute_scaled_freqs(self, device: str, alpha: int):
+        """
+        Compute the scaled frequencies for Llama3-style scaling.
+
+        Args:
+            device (str): The device to compute on.
+            alpha (int): The alpha value.
+
+        Returns:
+            torch.Tensor: The scaled frequencies.
+        """
         freqs = super().compute_scaled_freqs(device, alpha)
 
         factor = self.scaling_info["factor"]
@@ -202,6 +321,20 @@ _rope_scale_mapping = {
 
 
 class RotaryEmbedding(PositionEncoder):
+    """
+    This implementation of Rotary Position Embeddings (RoPE) avoids
+    complex numbers, and so can be used with torch.compile.
+
+    https://arxiv.org/abs/2104.09864
+
+    Args:
+        dim (int): Per-head embedding dimension.
+        ratio (float): The ratio for the geometric progression to compute the rotation angles.
+        max_seq_len (int): Maximum expected sequence length for the model, if exceeded the cached freqs will be recomputed.
+        partial_rope (float): Fraction of head dimension to apply rope to.
+        scaling (dict): Dictionary of information on how to scale RoPE to higher seq lens.
+    """
+
     def __init__(
         self,
         dim: int,
@@ -210,26 +343,6 @@ class RotaryEmbedding(PositionEncoder):
         partial_rope=1.0,
         scaling={},
     ):
-        """
-        This implementation of Rotary Position Embeddings (RoPE) avoids
-        complex numbers, and so can be used with torch.compile.
-
-        https://arxiv.org/abs/2104.09864
-
-        ...
-        Args
-        ----
-        dim : int
-            Per-head embedding dimension
-        max_seq_len : int
-            Maximum expected sequence length for the model, if exceeded the cached freqs will be recomputed
-        ratio: int
-            The ratio for the geometric progression to compute the rotation angles
-        partial_rope: int
-            fraction of head dimension to apply rope to
-        scaling: dict
-            dictionary of information on how to scale RoPE to higher seq lens
-        """
         super(RotaryEmbedding, self).__init__()
         self.partial_rope = partial_rope
         self.dim = int(partial_rope * dim)
@@ -243,6 +356,16 @@ class RotaryEmbedding(PositionEncoder):
         self.max_seq_len_cached: MutableMapping[int, int] = {}
 
     def compute_freqs_cis(self, device, max_seq_len=2048):
+        """
+        Compute the complex exponentials for the rotary embeddings.
+
+        Args:
+            device: The device to compute on.
+            max_seq_len (int): The maximum sequence length.
+
+        Returns:
+            int: The alpha value for scaling.
+        """
         alpha = self.rope_scaling.get_alpha(max_seq_len)
 
         if device == torch.device("meta"):
@@ -280,6 +403,16 @@ class RotaryEmbedding(PositionEncoder):
         return alpha
 
     def reshape_for_broadcast(self, x: torch.Tensor, cur_freqs):
+        """
+        Reshape the frequencies for broadcasting.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            cur_freqs (torch.Tensor): The current frequencies.
+
+        Returns:
+            torch.Tensor: The reshaped frequencies.
+        """
         ndim = x.ndim
         assert 1 < ndim, ndim
         assert cur_freqs.size()[:2] == (
@@ -298,17 +431,17 @@ class RotaryEmbedding(PositionEncoder):
         use_cache=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Args
-        ----
-        q : torch.Tensor
-            Embedded query tensor, expected size is B x S x H x Eh
-        k : torch.Tensor
-            Embedded query tensor, expected size is B x S x H x Eh
-        position_ids : Optional[torch.LongTensor]
-            The position of each of the tokens encoded in q and k. This is important in
-            kv-caching and left-padding situations, for which the rotation to be applied might
-            not always be the pre-cached position 0...S. For kv-caching without dynamic batching
-            or variable per-row left padding position_ids is shared for all the batch.
+        Adjust the query and key tensors with rotary embeddings.
+
+        Args:
+            q (torch.Tensor): Embedded query tensor, expected size is B x S x H x Eh.
+            k (torch.Tensor): Embedded key tensor, expected size is B x S x H x Eh.
+            position_ids (Optional[torch.LongTensor]): The position of each of the tokens encoded in q and k.
+            past_kv_state (Optional[Tuple[torch.Tensor | None, torch.Tensor | None]]): The past key-value state.
+            use_cache (bool): Whether to use the cache.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The adjusted query and key tensors.
         """
         assert len(q.size()) == 4
         assert len(k.size()) == 4

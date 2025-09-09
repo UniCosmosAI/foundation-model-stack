@@ -27,6 +27,26 @@ from fms.utils.config import ModelConfig
 
 @dataclass
 class MixtralConfig(ModelConfig):
+    """
+    Configuration for the Mixtral model.
+
+    Args:
+        src_vocab_size (int): The size of the source vocabulary.
+        dim (int): The embedding dimension.
+        norm_eps (float): The epsilon value for layer normalization.
+        nheads (int): The number of attention heads.
+        kvheads (int): The number of key-value heads.
+        nlayers (int): The number of layers in the model.
+        hidden_dim (int): The hidden dimension of the feed-forward network.
+        p_dropout (float): The dropout probability.
+        num_experts (int): The number of experts in the mixture-of-experts layer.
+        top_k_experts (int): The number of experts to use for each token.
+        max_expected_seq_len (int): The maximum expected sequence length.
+        rope_base (float): The base value for RoPE.
+        ntk_scaling (bool): Whether to use NTK scaling for RoPE.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     src_vocab_size: int = 32_000  # can be set by tokenizer
     dim: int = 4096
     norm_eps: float = 1e-5
@@ -44,6 +64,14 @@ class MixtralConfig(ModelConfig):
 
 
 class MixtralBlock(nn.Module):
+    """
+    A single block of the Mixtral model.
+
+    Args:
+        config (MixtralConfig): The configuration for the Mixtral model.
+        rotary_emb (RotaryEmbedding): The rotary embedding layer.
+    """
+
     def __init__(self, config: MixtralConfig, rotary_emb: RotaryEmbedding):
         super(MixtralBlock, self).__init__()
         self.config = config
@@ -102,6 +130,20 @@ class MixtralBlock(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the MixtralBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_state (Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]): The past key-value state for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[torch.FloatTensor, torch.FloatTensor]]]:
+                The output tensor, and the new cache if use_cache is True.
+        """
         # if the cache is not empty, we need to get the kv cache for self and cross attention
         self_attn_past_key_value = past_key_value_state
 
@@ -141,6 +183,15 @@ class MixtralBlock(nn.Module):
 
 
 class MixtralHeadless(nn.Module):
+    """
+    The Mixtral model without the language model head.
+
+    Args:
+        config (Optional[MixtralConfig]): The configuration for the Mixtral model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[MixtralConfig] = None,
@@ -193,6 +244,9 @@ class MixtralHeadless(nn.Module):
             self.dropout = nn.Dropout(self.config.p_dropout)
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         nn.init.trunc_normal_(
             self.embedding.weight, mean=0.0, std=self.config.dim**-0.5
         )
@@ -214,6 +268,9 @@ class MixtralHeadless(nn.Module):
                 m.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as initializing RoPE on the correct device.
+        """
         # This function is called in `get_model` after the model is fully initalized in the correct device
 
         # init RoPE on the right device(s)
@@ -231,6 +288,21 @@ class MixtralHeadless(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the MixtralHeadless model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]):
+                The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]:
+                The output tensor and the new cache if use_cache is True.
+        """
         # Embed the given vocabulary indices using the given attention mask, with pre-/post-norm and dropout as specified
         # x: batch_size x seq_len
         # mask: batch_size x seq_len x seq_len
@@ -270,6 +342,15 @@ class MixtralHeadless(nn.Module):
 
 
 class Mixtral(nn.Module):
+    """
+    The Mixtral model.
+
+    Args:
+        config (Optional[MixtralConfig]): The configuration for the Mixtral model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[MixtralConfig] = None,
@@ -291,13 +372,31 @@ class Mixtral(nn.Module):
         self.head = self.distributed_strategy.distribute_module(head)
 
     def get_config(self) -> MixtralConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            MixtralConfig: The configuration of the model.
+        """
         return self.config
 
     @classmethod
     def from_config(cls, config: MixtralConfig) -> "Mixtral":
+        """
+        Creates a Mixtral model from a configuration object.
+
+        Args:
+            config (MixtralConfig): The configuration for the Mixtral model.
+
+        Returns:
+            Mixtral: The Mixtral model.
+        """
         return cls(config)
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         # We're just going to down-scale the final prediction head to be
         # mixed-fan (inputs and gradients scale to the same inverse factors) if it isn't tied
         self.head.weight.data.normal_(
@@ -308,6 +407,9 @@ class Mixtral(nn.Module):
         self.base_model.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps.
+        """
         # This function is called in `get_model` after the model is fully initalized in the correct device
         self.base_model.post_init()
 
@@ -320,6 +422,21 @@ class Mixtral(nn.Module):
         only_last_token: bool = False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the Mixtral model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[Tuple[torch.FloatTensor,]]): The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            only_last_token (bool): Whether to only return the predictions for the last token.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[torch.FloatTensor,]]]:
+                The output predictions, and the new cache if use_cache is True.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x,
             position_ids=position_ids,
@@ -347,6 +464,16 @@ _architecture_name = "mixtral"
 
 
 def _mixtral_factory_factory(config):
+    """
+    A factory function that creates a factory function for a Mixtral model with a given configuration.
+
+    Args:
+        config (MixtralConfig): The configuration for the Mixtral model.
+
+    Returns:
+        Callable: A factory function that creates a Mixtral model.
+    """
+
     def factory(**kwargs):
         return Mixtral(config, **kwargs)
 
@@ -369,6 +496,17 @@ serialization.register_adapter_step(
 def _weight_fusion(
     input_sd: Mapping[str, Any], model_config: Optional[MixtralConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Performs weight fusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[MixtralConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -395,6 +533,16 @@ serialization.register_adapter_step(_architecture_name, "weight_fusion", _weight
 
 
 def _hf_to_fms_names(input_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face Mixtral state dictionary names to FMS Mixtral state dictionary names.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     replacements = [
         (r"output.weight", "head.weight"),
         (r"tok_embeddings.weight", "base_model.embedding.weight"),

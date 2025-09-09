@@ -12,6 +12,10 @@ from fms.utils import tokenizers
 
 @register_model("fms")
 class FMSEvalHarnessLM(LM):
+    """
+    A wrapper class for FMS models to be used with the lm-evaluation-harness library.
+    """
+
     def __init__(
         self,
         model: nn.Module,
@@ -20,6 +24,16 @@ class FMSEvalHarnessLM(LM):
         rank=0,
         world_size=1,
     ):
+        """
+        Initializes the FMSEvalHarnessLM.
+
+        Args:
+            model (nn.Module): The FMS model to be evaluated.
+            tokenizer (tokenizers.BaseTokenizer): The tokenizer to be used.
+            device (str, optional): The device to run the model on. Defaults to "cpu".
+            rank (int, optional): The rank of the current process. Defaults to 0.
+            world_size (int, optional): The total number of processes. Defaults to 1.
+        """
         self.wrapped_model = model
         self.tokenizer = tokenizer
         self._rank = rank
@@ -36,6 +50,16 @@ class FMSEvalHarnessLM(LM):
         self.model.config._name_or_path = "FMSEvalHarnessLM"  # type: ignore
 
     def loglikelihood_one(self, context: str, continuation: str) -> Tuple[float, bool]:
+        """
+        Calculates the log-likelihood of a single continuation given a context.
+
+        Args:
+            context (str): The context string.
+            continuation (str): The continuation string.
+
+        Returns:
+            Tuple[float, bool]: A tuple containing the log-likelihood and a boolean indicating if the prediction was greedy.
+        """
         context_ids = self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.tokenize(context)
         )
@@ -59,6 +83,15 @@ class FMSEvalHarnessLM(LM):
         return loglikelihood.sum().cpu().item(), greedy
 
     def loglikelihood(self, requests: List[Instance]) -> List[Tuple[float, bool]]:
+        """
+        Calculates the log-likelihood of a list of requests.
+
+        Args:
+            requests (List[Instance]): A list of requests, where each request is an instance with a context and a continuation.
+
+        Returns:
+            List[Tuple[float, bool]]: A list of tuples containing the log-likelihood and a boolean indicating if the prediction was greedy for each request.
+        """
         result = []
         for request in requests:
             context, continuation = request.args
@@ -68,7 +101,13 @@ class FMSEvalHarnessLM(LM):
     def loglikelihood_rolling(
         self, requests: List[Instance]
     ) -> List[Tuple[float, bool]]:
+        """
+        Not implemented.
+        """
         raise NotImplementedError("not implemented yet")
 
     def generate_until(self, requests: List[Instance]) -> List[str]:
+        """
+        Not implemented.
+        """
         raise NotImplementedError("not implemented yet")

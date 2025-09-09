@@ -18,10 +18,26 @@ else:
 
 
 class DistributedStrategy:
+    """
+    An abstract class for distributed strategies.
+
+    Args:
+        from_meta (bool): Whether the model is being loaded from a meta device.
+    """
+
     def __init__(self, from_meta=False):
         self.from_meta = from_meta
 
     def __should_distribute(self, module_name: str) -> bool:
+        """
+        Whether a module should be distributed.
+
+        Args:
+            module_name (str): The name of the module.
+
+        Returns:
+            bool: Whether the module should be distributed.
+        """
         return module_name not in _distributed_strategy_ignore_modules
 
     def distribute_module(
@@ -29,7 +45,14 @@ class DistributedStrategy:
     ) -> nn.Module:
         """
         Optionally a distributed strategy may distribute modules that are not
-        numbered layers
+        numbered layers.
+
+        Args:
+            module (nn.Module): The module to distribute.
+            final_layers (bool): Whether the module is in the final layers.
+
+        Returns:
+            nn.Module: The distributed module.
         """
         module_name = type(module).__name__
         if self.__should_distribute(module_name):
@@ -40,7 +63,14 @@ class DistributedStrategy:
 
     def distribute_layer(self, block: nn.Module, layer: int) -> nn.Module:
         """
-        Distribute each layer as-appropriate
+        Distribute each layer as-appropriate.
+
+        Args:
+            block (nn.Module): The block to distribute.
+            layer (int): The layer number.
+
+        Returns:
+            nn.Module: The distributed block.
         """
         block_name = type(block).__name__
         if self.__should_distribute(block_name):
@@ -54,19 +84,37 @@ class DistributedStrategy:
         self, module: nn.Module, final_layers: bool = False
     ) -> nn.Module:
         """
-        Distribute modules that are not numbered layers
+        Distribute modules that are not numbered layers.
+
+        Args:
+            module (nn.Module): The module to distribute.
+            final_layers (bool): Whether the module is in the final layers.
+
+        Returns:
+            nn.Module: The distributed module.
         """
         pass
 
     @abstractmethod
     def _distribute_layer(self, block: nn.Module, layer: int) -> nn.Module:
         """
-        Distribute each layer
+        Distribute each layer.
+
+        Args:
+            block (nn.Module): The block to distribute.
+            layer (int): The layer number.
+
+        Returns:
+            nn.Module: The distributed block.
         """
         pass
 
 
 class NotDistributed(DistributedStrategy):
+    """
+    A distributed strategy that does not distribute the model.
+    """
+
     def __init__(self, from_meta=False):
         super().__init__(from_meta)
 
@@ -83,6 +131,14 @@ NoOpStrategy = NotDistributed()
 
 
 class DeviceMover(nn.Module):
+    """
+    A module that moves tensors to a specific device.
+
+    Args:
+        module (nn.Module): The module to wrap.
+        device: The device to move tensors to.
+    """
+
     def __init__(self, module: nn.Module, device):
         super().__init__()
         self.device = device
@@ -93,6 +149,16 @@ class DeviceMover(nn.Module):
         self.__dict__ = attr
 
     def forward(self, *args, **kwargs):
+        """
+        Forward pass for the DeviceMover.
+
+        Args:
+            *args: The positional arguments.
+            **kwargs: The keyword arguments.
+
+        Returns:
+            The output of the wrapped module.
+        """
         device = self.device
         args = [
             arg.to(device) if isinstance(arg, torch.Tensor) else arg for arg in args
@@ -109,6 +175,15 @@ class DeviceMover(nn.Module):
 
 
 class UniformModelParallelStrategy(DistributedStrategy):
+    """
+    A uniform model parallel strategy.
+
+    Args:
+        devices (List[int]): The devices to distribute the model across.
+        num_layers (int): The number of layers in the model.
+        from_meta (bool): Whether the model is being loaded from a meta device.
+    """
+
     def __init__(self, devices: List[int], num_layers: int, from_meta=False):
         super().__init__(from_meta)
         num_dev = len(devices)
@@ -147,6 +222,14 @@ class UniformModelParallelStrategy(DistributedStrategy):
 
 
 class TensorParallelStrategy(DistributedStrategy):
+    """
+    A tensor parallel strategy.
+
+    Args:
+        group (ProcessGroup, optional): The process group for tensor parallelism. Defaults to None.
+        from_meta (bool): Whether the model is being loaded from a meta device.
+    """
+
     def __init__(self, group=None, from_meta=False):
         super().__init__(from_meta)
         assert torch.distributed.is_initialized(), "must initialize a process group"

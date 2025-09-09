@@ -13,24 +13,48 @@ from fms.datasets.util import SavableDataset
 
 
 class _ArrowFileData(UserDict):
+    """
+    A UserDict that represents a single arrow file.
+
+    Args:
+        fs (FileSystem): The filesystem to use.
+        path (str): The path to the arrow file.
+        column_name (str): The name of the column containing tokens.
+    """
+
     def __init__(self, fs: FileSystem, path: str, column_name: str = "tokens"):
         self.fs = fs
         self.path = path
         self.column_name = column_name
 
     def __getitem__(self, idx: int):
+        """
+        Get a record batch from the arrow file.
+
+        Args:
+            idx (int): The index of the record batch.
+
+        Returns:
+            The record batch.
+        """
         with self.fs.open_input_file(self.path) as file:
             reader = pa.ipc.open_file(file)
             # print(self.path, file, idx)
             return reader.get_batch(idx)[self.column_name]
 
     def __iter__(self):
+        """
+        Iterate over the record batches in the arrow file.
+        """
         with self.fs.open_input_file(self.path) as file:
             reader = pa.ipc.open_file(file)
             for i in range(reader.num_record_batches):
                 yield reader.get_batch(i)[self.column_name]
 
     def __len__(self):
+        """
+        Get the number of record batches in the arrow file.
+        """
         with self.fs.open_input_file(self.path) as file:
             reader = pa.ipc.open_file(file)
             return reader.num_record_batches
@@ -41,14 +65,12 @@ class ArrowFilesDataset(IterableDataset, SavableDataset):
     Creates a dataset from a path to a directory of arrow files, either in
     S3/COS or a local file system.
 
-    uri: s3://endpoint_host/path/to/files or file:///path/to/files
-    world_size: for distributed training, used as the step size when stepping
-        through data
-    rank: for distributed training. Take every rank'th example.
-    column_name: the name of the pyarrow column containing tokens
-    max_seq_len: if a single record batch is longer than this, it will be split
-        to avoid large memory copies. This class doesn't do packing of short
-        lines, only splitting of long ones.
+    Args:
+        uri (str): s3://endpoint_host/path/to/files or file:///path/to/files
+        rank (int): for distributed training. Take every rank'th example.
+        world_size (int): for distributed training, used as the step size when stepping through data.
+        column_name (str): the name of the pyarrow column containing tokens.
+        max_seq_len (Optional[int]): if a single record batch is longer than this, it will be split to avoid large memory copies.
     """
 
     def __init__(
@@ -69,15 +91,30 @@ class ArrowFilesDataset(IterableDataset, SavableDataset):
         self._initialize()
 
     def load_state_dict(self, state_dict):
+        """
+        Load the state of the dataset.
+
+        Args:
+            state_dict (dict): The state dictionary to load.
+        """
         super().load_state_dict(state_dict)
         self._initialize()
 
     def state_dict(self):
+        """
+        Get the state of the dataset.
+
+        Returns:
+            dict: The state dictionary.
+        """
         if self._rank != 0:
             warnings.warn("State dict will only be correct if taken from rank=0")
         return super().state_dict()
 
     def _initialize(self):
+        """
+        Initialize the dataset by loading the arrow files.
+        """
         url = urllib3.util.parse_url(self.uri)
         path = url.path
         file_system = None
@@ -110,6 +147,9 @@ class ArrowFilesDataset(IterableDataset, SavableDataset):
             self._files = self._files[1:]
 
     def __iter__(self):
+        """
+        Iterate over the dataset.
+        """
         for file in self._files:
             remainder = (len(file) - self._file_offset) % self._step
             next_file_offset = self._step - remainder

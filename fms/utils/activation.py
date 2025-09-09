@@ -4,6 +4,11 @@ import torch.nn as nn
 
 
 class GELUTanh(nn.GELU):
+    """
+    A GELU activation function with the 'tanh' approximation.
+    This is a wrapper around `torch.nn.GELU(approximate="tanh")`.
+    """
+
     def __init__(self):
         super().__init__(approximate="tanh")
 
@@ -32,17 +37,13 @@ __CLS_2_ACT: Dict[Type[nn.Module], str] = {v: k for k, v in __ACT_2_CLS.items()}
 
 
 def str_to_activation(activation_str: str) -> nn.Module:
-    """Convert an activation string to an instantiated activation function
+    """Convert an activation string to an instantiated activation function.
 
-    Parameters
-    ----------
-    activation_str: str
-        the activation key to convert
+    Args:
+        activation_str (str): The activation key to convert.
 
-    Returns
-    -------
-    nn.Module
-        one of nn.GELU, nn.Mish, nn.ReLU, nn.Sigmoid, nn.SiLU, nn.Tanh depending on the key given
+    Returns:
+        nn.Module: An instantiated activation function.
     """
     activation_str = activation_str.lower()
     if activation_str not in __ACT_2_CLS.keys():
@@ -51,17 +52,13 @@ def str_to_activation(activation_str: str) -> nn.Module:
 
 
 def activation_to_str(activation: Union[Type[nn.Module], nn.Module]) -> str:
-    """Convert an activation function or activation class to its string representation
+    """Convert an activation function or activation class to its string representation.
 
-    Parameters
-    ----------
-    activation: type(nn.Module) or nn.Module
-        the activation key to convert
+    Args:
+        activation (Union[Type[nn.Module], nn.Module]): The activation class or instance to convert.
 
-    Returns
-    -------
-    str
-        one of "gelu", "mish", "relu", "sigmoid", "silu", "swish", "tanh" depending on the key given
+    Returns:
+        str: The string representation of the activation function.
     """
     if not isinstance(activation, type):
         activation = type(activation)

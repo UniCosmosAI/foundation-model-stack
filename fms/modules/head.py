@@ -18,6 +18,16 @@ class MLPClassificationHead(nn.Module):
     A general purpose Classification Head. When applied on the output of a
     Headless model, will project from the embedding space to a space equal to
     the number of classes provided.
+
+    Args:
+        emb_dim (int): The embedding dimension.
+        num_classes (int): The output number of classes.
+        activation_fn (nn.Module): The activation function to use prior to applying the dense layer.
+        layer_norm (nn.Module, optional): The layer norm to apply prior to running the model head. Defaults to None.
+        dense_bias (bool): The bias param in the dense layer. Defaults to True.
+        head_bias (bool): The bias param in the head layer. Defaults to True.
+        dropout (float): The dropout to use directly after activation. Defaults to 0.0.
+        apply_pooling_fn (bool): If True, will take the first token for each sequence in the batch as input to the dense layer. Otherwise, use the entire sequence as input to the dense layer. Defaults to False.
     """
 
     def __init__(
@@ -31,29 +41,6 @@ class MLPClassificationHead(nn.Module):
         dropout: float = 0.0,
         apply_pooling_fn: bool = False,
     ):
-        """
-        Initialize a MLPClassificationHead
-
-        Parameters
-        ----------
-        emb_dim: int
-            the embedding dimension
-        num_classes: int
-            the output number of classes
-        activation_fn: nn.Module
-            the activation function to use prior to apply the dense layer
-        layer_norm: nn.Module, optional
-            the layer norm to apply prior to running the model head, (default is no layer_norm)
-        dense_bias: bool
-            the bias param in the dense layer (default is True)
-        head_bias: bool
-            the bias param in the head layer (default is True)
-        dropout: float
-            the dropout to use directly after activation (default is 0.0)
-        apply_pooling_fn: bool
-            if True, will take the first token for each sequence in the batch as input to the dense layer. Otherwise,
-            use the entire sequence as input to the dense layer
-        """
         super().__init__()
         self.dense = nn.Linear(emb_dim, emb_dim, bias=dense_bias)
         self.act = activation_fn
@@ -63,17 +50,14 @@ class MLPClassificationHead(nn.Module):
         self.apply_pooling_fn = apply_pooling_fn
 
     def forward(self, x: torch.Tensor):
-        """Run the forward method of a classification head
+        """
+        Run the forward method of a classification head.
 
-        Parameters
-        ----------
-        x: torch.Tensor
-            typically the output from a headless model
+        Args:
+            x (torch.Tensor): Typically the output from a headless model.
 
-        Returns
-        -------
-        torch.Tensor
-            a tensor projected to a space given by num_classes
+        Returns:
+            torch.Tensor: A tensor projected to a space given by num_classes.
         """
         if self.apply_pooling_fn:
             x = x[:, 0]
@@ -87,26 +71,47 @@ class MLPClassificationHead(nn.Module):
 
 
 class LinearClassificationHead(nn.Linear):
+    """
+    A linear classification head that can be converted to a tensor-parallel version.
+    """
+
     # To differentiate for TP
     def forward(self, x):
+        """
+        Forward pass for the linear classification head.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         return super().forward(x)
 
     def to_tp(self, group: ProcessGroup) -> "TPLinearClassificationHead":
+        """
+        Converts the LinearClassificationHead to a TPLinearClassificationHead.
+
+        Args:
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPLinearClassificationHead: The TPLinearClassificationHead layer.
+        """
         return TPLinearClassificationHead.import_module(self, group)
 
 
 class TPLinearClassificationHead(LinearClassificationHead, TPModule):
     """
-    Output embedding layer for language models.
+    Output embedding layer for language models with tensor parallelism.
 
-    Args
-    ----
-    Check nn.Linear for up-to-date docs
-
-    world_size: int
-        the number of processes running this model in TP
-    rank: int
-        the index of this process wrt to the rest running the model in TP
+    Args:
+        vocab_size (int): The size of the vocabulary.
+        emb_dim (int): The embedding dimension.
+        bias (bool): Whether to use a bias term.
+        device (torch.device, optional): The device to place the layer on.
+        dtype (torch.dtype, optional): The data type of the layer.
+        group (ProcessGroup, optional): The process group for tensor parallelism.
     """
 
     def __init__(
@@ -137,6 +142,16 @@ class TPLinearClassificationHead(LinearClassificationHead, TPModule):
     def import_module(
         head: LinearClassificationHead, group: ProcessGroup
     ) -> "TPLinearClassificationHead":
+        """
+        Imports a LinearClassificationHead module to a TPLinearClassificationHead module.
+
+        Args:
+            head (LinearClassificationHead): The LinearClassificationHead module to import.
+            group (ProcessGroup): The process group for tensor parallelism.
+
+        Returns:
+            TPLinearClassificationHead: The imported TPLinearClassificationHead module.
+        """
         tp_lmh = TPLinearClassificationHead(
             vocab_size=head.out_features,
             emb_dim=head.in_features,
@@ -151,6 +166,12 @@ class TPLinearClassificationHead(LinearClassificationHead, TPModule):
         self,
         tensor_values: Dict[str, torch.Tensor],
     ):
+        """
+        Loads the weights for the TPLinearClassificationHead layer.
+
+        Args:
+            tensor_values (Dict[str, torch.Tensor]): The tensor values to load.
+        """
         # 1. Grab the weights from tensor_values
         used_keys: Set[str] = set()
         head_weight = self._get_sd_weight(tensor_values, used_keys, ["weight"])
@@ -168,6 +189,15 @@ class TPLinearClassificationHead(LinearClassificationHead, TPModule):
             self.sharded_copy(self.bias, head_bias, 0, [self.world_size])
 
     def forward(self, inp):
+        """
+        Forward pass for the TPLinearClassificationHead layer.
+
+        Args:
+            inp (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         # vocab_idx: b n d if reverse, else b n
         inp_par = copy_to_tensor_model_parallel_region(inp, self.group)
         out_par = LinearClassificationHead.forward(self, inp_par)

@@ -18,6 +18,19 @@ def __one_step(
     loss_fn: nn.Module,
     grad_scaler: Optional[amp.GradScaler],
 ):
+    """
+    Perform a single training step.
+
+    Args:
+        model (nn.Module): The model to train.
+        input (torch.Tensor): The input tensor.
+        label (torch.Tensor): The label tensor.
+        loss_fn (nn.Module): The loss function.
+        grad_scaler (Optional[amp.GradScaler]): The gradient scaler.
+
+    Returns:
+        torch.Tensor: The loss.
+    """
     autocast = amp.autocast if grad_scaler is not None else nullcontext
     with autocast():
         output = model(input)
@@ -31,6 +44,14 @@ def __one_step(
 
 
 def __optimize(model, optimizer, grad_scaler):
+    """
+    Perform an optimization step.
+
+    Args:
+        model (nn.Module): The model to optimize.
+        optimizer (Optimizer): The optimizer.
+        grad_scaler (Optional[amp.GradScaler]): The gradient scaler.
+    """
     if grad_scaler is not None:
         grad_scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -53,6 +74,20 @@ def __one_epoch(
     plugins: List[TrainerPlugin],
     accum_iters: int = 1,
 ):
+    """
+    Perform one epoch of training.
+
+    Args:
+        model (nn.Module): The model to train.
+        optimizer (Optimizer): The optimizer.
+        data (DataLoader): The data loader.
+        device: The device to train on.
+        loss_fn: The loss function.
+        epoch (int): The current epoch.
+        prev_step (int): The previous step.
+        plugins (List[TrainerPlugin]): The trainer plugins.
+        accum_iters (int): The number of gradient accumulation iterations.
+    """
     print0("Epoch", epoch)
     model.train()
 
@@ -108,6 +143,21 @@ def train(
     trainer_plugins: List[TrainerPlugin] = [],
     grad_accum_iters: int = 1,
 ):
+    """
+    Train a model.
+
+    Args:
+        model: The model to train.
+        optimizer: The optimizer.
+        dataloader (DataLoader): The data loader.
+        device: The device to train on.
+        loss_fn (nn.Module): The loss function.
+        start_epoch (int): The starting epoch.
+        epochs (int): The number of epochs to train for.
+        prev_step (int): The previous step.
+        trainer_plugins (List[TrainerPlugin]): The trainer plugins.
+        grad_accum_iters (int): The number of gradient accumulation iterations.
+    """
     for epoch in range(start_epoch, start_epoch + epochs):
         __one_epoch(
             model,

@@ -29,6 +29,35 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GraniteConfig(ModelConfig):
+    """
+    Configuration for the Granite model.
+
+    Args:
+        src_vocab_size (int): The size of the source vocabulary.
+        emb_dim (int): The embedding dimension.
+        norm_eps (float): The epsilon value for layer normalization.
+        nheads (int): The number of attention heads.
+        kvheads (int): The number of key-value heads.
+        nlayers (int): The number of layers in the model.
+        pad_id (int): The ID of the padding token.
+        hidden_grow_factor (float): The growth factor for the hidden layer in the feed-forward network.
+        multiple_of (int): The multiple of value for the feed-forward network.
+        activation_fn (str): The activation function to use.
+        p_dropout (float): The dropout probability.
+        max_expected_seq_len (int): The maximum expected sequence length.
+        ntk_scaling (bool): Whether to use NTK scaling for RoPE.
+        attn_bias (bool): Whether to use bias in the attention layer.
+        mlp_bias (bool): Whether to use bias in the MLP layer.
+        tie_heads (bool): Whether to tie the embedding and output heads.
+        rope_theta (float): The theta value for RoPE.
+        embedding_multiplier (float): The multiplier for the embedding layer.
+        logits_scaling (float): The scaling factor for the logits.
+        residual_multiplier (float): The multiplier for the residual connection.
+        attention_multiplier (float): The multiplier for the attention scores.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     src_vocab_size: int = 32_000  # can be set by tokenizer
     emb_dim: int = 4096
     norm_eps: float = 1e-5
@@ -55,6 +84,14 @@ class GraniteConfig(ModelConfig):
 
 
 class GraniteBlock(nn.Module):
+    """
+    A single block of the Granite model.
+
+    Args:
+        config (GraniteConfig): The configuration for the Granite model.
+        rotary_emb (RotaryEmbedding): The rotary embedding layer.
+    """
+
     def __init__(self, config: GraniteConfig, rotary_emb: RotaryEmbedding):
         super(GraniteBlock, self).__init__()
         self.config = config
@@ -120,6 +157,20 @@ class GraniteBlock(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the GraniteBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_state (Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]): The past key-value state for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[torch.FloatTensor, torch.FloatTensor]]]:
+                The output tensor, and the new cache if use_cache is True.
+        """
         # if the cache is not empty, we need to get the kv cache for self and cross attention
         self_attn_past_key_value = past_key_value_state
 
@@ -157,6 +208,15 @@ class GraniteBlock(nn.Module):
 
 
 class GraniteHeadless(nn.Module):
+    """
+    The Granite model without the language model head.
+
+    Args:
+        config (Optional[GraniteConfig]): The configuration for the Granite model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[GraniteConfig] = None,
@@ -219,6 +279,9 @@ class GraniteHeadless(nn.Module):
             self.dropout = nn.Dropout(self.config.p_dropout)
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         nn.init.trunc_normal_(
             self.embedding.weight, mean=0.0, std=self.config.emb_dim**-0.5
         )
@@ -244,6 +307,13 @@ class GraniteHeadless(nn.Module):
         cached_freqs: dict[Optional[torch.device], dict[int, torch.Tensor]],
         max_seq_len_cached: dict[Optional[torch.device], int],
     ):
+        """
+        Cleans up the rotary embedding cache by removing meta tensors.
+
+        Args:
+            cached_freqs (dict): The cached frequencies.
+            max_seq_len_cached (dict): The maximum sequence length cached.
+        """
         # remove meta tensors from cached_freqs
         for dev in list(cached_freqs.keys()):
             for alp in list(cached_freqs[dev].keys()):
@@ -254,6 +324,9 @@ class GraniteHeadless(nn.Module):
                         del max_seq_len_cached[dev]
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as cleaning up the rotary embedding cache and initializing RoPE on the correct device.
+        """
         # This function is called in `get_model` after the model is
         # fully initalized on the correct device
 
@@ -277,6 +350,21 @@ class GraniteHeadless(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the GraniteHeadless model.
+
+        Args:
+            x_in (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]):
+                The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, List[Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]]:
+                The output tensor and the new cache if use_cache is True.
+        """
         # Embed the given vocabulary indices using the given attention mask, with pre-/post-norm and dropout as specified
         # x_in: batch_size x seq_len x emb_dim if input is already embedded, otherwise batch_size x seq_len
         # mask: batch_size x seq_len x seq_len
@@ -316,6 +404,15 @@ class GraniteHeadless(nn.Module):
 
 
 class Granite(nn.Module):
+    """
+    The Granite model.
+
+    Args:
+        config (Optional[GraniteConfig]): The configuration for the Granite model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[GraniteConfig] = None,
@@ -337,12 +434,30 @@ class Granite(nn.Module):
 
     @classmethod
     def from_config(cls, config: GraniteConfig) -> "Granite":
+        """
+        Creates a Granite model from a configuration object.
+
+        Args:
+            config (GraniteConfig): The configuration for the Granite model.
+
+        Returns:
+            Granite: The Granite model.
+        """
         return cls(config)
 
     def get_config(self) -> GraniteConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            GraniteConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         self.head.weight.data.normal_(
             0,
             1 / math.sqrt(math.sqrt(self.config.emb_dim * self.config.src_vocab_size)),
@@ -350,6 +465,9 @@ class Granite(nn.Module):
         self.base_model.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as tying the embedding and output heads.
+        """
         # if this model ties weights, they are tied here
         if self.config.tie_heads:
             # handle assignment of non-meta weights to meta parameters
@@ -369,6 +487,21 @@ class Granite(nn.Module):
         only_last_token: bool = False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the Granite model.
+
+        Args:
+            x (torch.LongTensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[Tuple[torch.FloatTensor,]]): The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            only_last_token (bool): Whether to only return the predictions for the last token.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Tuple[torch.FloatTensor,]]]:
+                The output predictions, and the new cache if use_cache is True.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x,
             position_ids=position_ids,
@@ -437,6 +570,16 @@ _architecture_name = "granite"
 
 
 def _granite_factory_factory(config):
+    """
+    A factory function that creates a factory function for a Granite model with a given configuration.
+
+    Args:
+        config (GraniteConfig): The configuration for the Granite model.
+
+    Returns:
+        Callable: A factory function that creates a Granite model.
+    """
+
     def factory(**kwargs):
         return Granite(config, **kwargs)
 
@@ -452,6 +595,17 @@ models.register_model(
 def _weight_fusion(
     input_sd: Mapping, model_config: Optional[GraniteConfig] = None, **kwargs
 ):
+    """
+    Performs weight fusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping): The input state dictionary.
+        model_config (Optional[GraniteConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -469,6 +623,16 @@ serialization.register_adapter_step(_architecture_name, "weight_fusion", _weight
 
 
 def _hf_to_fms_names(input_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face model state dictionary names to FMS model state dictionary names.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     replacements = [
         (r"^lm_head.weight", "head.weight"),
         (r"^model.embed_tokens.weight", "base_model.embedding.weight"),
@@ -499,6 +663,15 @@ serialization.register_adapter_step(
 
 
 def _get_rope_params(linear_type: str) -> list[str]:
+    """
+    Returns the list of RoPE parameters for a given linear layer type.
+
+    Args:
+        linear_type (str): The type of linear layer.
+
+    Returns:
+        list[str]: The list of RoPE parameters.
+    """
     if "gptq" in linear_type:
         return ["qweight", "scales", "qzeros", "bias"]
     elif "int8" in linear_type:
@@ -513,6 +686,17 @@ def _get_rope_params(linear_type: str) -> list[str]:
 def _hf_to_fms_rope(
     input_sd: Mapping[str, Any], model_config: Optional[GraniteConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face RoPE parameters to FMS RoPE parameters.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[GraniteConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     new_sd = {}
 
     if model_config:
@@ -578,6 +762,20 @@ def _hf_to_fms_rope(
 def _hf_gptq_granite_check(
     input_sd: Mapping[str, Any], model_config: Optional[GraniteConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Checks if a GPTQ Hugging Face Granite checkpoint can be loaded into a model with fused weights.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[GraniteConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The input state dictionary.
+
+    Raises:
+        ValueError: If a GPTQ HF Granite checkpoint is being loaded into a model with fused weights.
+    """
     has_fused_weights = True
     linear_type = "torch_linear"
     if model_config:

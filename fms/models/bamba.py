@@ -29,6 +29,38 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class BambaConfig(ModelConfig):
+    """
+    Configuration for the Bamba model.
+
+    Args:
+        src_vocab_size (int): The size of the source vocabulary.
+        emb_dim (int): The embedding dimension.
+        nheads (int): The number of attention heads.
+        kvheads (int): The number of key-value heads.
+        head_dim (int): The dimension of each attention head.
+        norm_eps (float): The epsilon value for layer normalization.
+        nlayers (int): The number of layers in the model.
+        activation_fn (str): The activation function to use.
+        attn_layer_indices (List[int]): The indices of the layers that should use attention instead of SSM.
+        max_expected_seq_len (int): The maximum expected sequence length.
+        ntk_scaling (bool): Whether to use NTK scaling for RoPE.
+        tie_heads (bool): Whether to tie the embedding and output heads.
+        rope_theta (float): The theta value for RoPE.
+        p_dropout (float): The dropout probability.
+        conv_kernel (int): The kernel size for the convolutional layer in the SSM.
+        state_size (int): The state size for the SSM.
+        hidden_grow_factor (float): The growth factor for the hidden layer in the feed-forward network.
+        mamba_expand (float): The expansion factor for the Mamba layers.
+        mamba_n_heads (int): The number of heads for the Mamba layers.
+        multiple_of (int): The multiple of value for the feed-forward network.
+        use_bias (bool): Whether to use bias in the linear layers.
+        use_conv_bias (bool): Whether to use bias in the convolutional layer of the SSM.
+        n_groups (int): The number of groups for the SSM.
+        chunk_size (int): The chunk size for the SSM.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     src_vocab_size: int = 32768
     emb_dim: int = 4096
     nheads: int = 128
@@ -58,6 +90,15 @@ class BambaConfig(ModelConfig):
 
 
 class BambaBlock(nn.Module):
+    """
+    A single block of the Bamba model. This block can be either a self-attention block or a Mamba (SSM) block.
+
+    Args:
+        config (BambaConfig): The configuration for the Bamba model.
+        rotary_emb (RotaryEmbedding): The rotary embedding layer.
+        layer_index (int): The index of the current layer.
+    """
+
     def __init__(self, config: BambaConfig, rotary_emb, layer_index: int):
         super(BambaBlock, self).__init__()
         self.config = config
@@ -140,6 +181,21 @@ class BambaBlock(nn.Module):
         cache_position=None,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the BambaBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_state (Optional[Union[SSMCacheUnit, Tuple[torch.FloatTensor, torch.FloatTensor]]]): The past key-value state for caching.
+            use_cache (bool): Whether to use caching.
+            cache_position (Optional[torch.LongTensor]): The position of the cache.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Union[SSMCacheUnit, Tuple[torch.FloatTensor, torch.FloatTensor]]]]:
+                The output tensor, and the new cache if use_cache is True.
+        """
         seqlen_offset = x.shape[1]
         residual = x
         x = self.ln(x)
@@ -190,6 +246,14 @@ class BambaBlock(nn.Module):
 
 
 class BambaHeadless(nn.Module):
+    """
+    The Bamba model without the language model head.
+
+    Args:
+        config (BambaConfig): The configuration for the Bamba model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+    """
+
     def __init__(self, config: BambaConfig, distributed_strategy: DistributedStrategy):
         super(BambaHeadless, self).__init__()
         self.config = config
@@ -244,6 +308,9 @@ class BambaHeadless(nn.Module):
         )
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         nn.init.trunc_normal_(
             self.embedding.weight, mean=0.0, std=self.config.emb_dim**-0.5
         )
@@ -269,6 +336,13 @@ class BambaHeadless(nn.Module):
         cached_freqs: dict[Optional[torch.device], dict[int, torch.Tensor]],
         max_seq_len_cached: dict[Optional[torch.device], int],
     ):
+        """
+        Cleans up the rotary embedding cache by removing meta tensors.
+
+        Args:
+            cached_freqs (dict): The cached frequencies.
+            max_seq_len_cached (dict): The maximum sequence length cached.
+        """
         # remove meta tensors from cached_freqs
         for dev in list(cached_freqs.keys()):
             for alp in list(cached_freqs[dev].keys()):
@@ -279,6 +353,9 @@ class BambaHeadless(nn.Module):
                         del max_seq_len_cached[dev]
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as cleaning up the rotary embedding cache and initializing RoPE on the correct device.
+        """
         # This function is called in `get_model` after the model is
         # fully initalized on the correct device
 
@@ -302,6 +379,21 @@ class BambaHeadless(nn.Module):
         use_cache=False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the BambaHeadless model.
+
+        Args:
+            x_in (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[List[Union[SSMCacheUnit, Tuple[torch.FloatTensor, torch.FloatTensor]]]]):
+                The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, List[Union[SSMCacheUnit, Tuple[torch.FloatTensor, torch.FloatTensor]]]]:
+                The output tensor and the new cache if use_cache is True.
+        """
         # Embed the given vocabulary indices using the given attention mask, with pre-/post-norm and dropout as specified
         # x_in: batch_size x seq_len
         # mask: batch_size x seq_len x seq_len
@@ -374,6 +466,15 @@ class BambaHeadless(nn.Module):
 
 
 class Bamba(nn.Module):
+    """
+    The Bamba model, a hybrid of Mamba (SSM) and Transformer (attention) models.
+
+    Args:
+        config (Optional[BambaConfig]): The configuration for the Bamba model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[BambaConfig] = None,
@@ -396,12 +497,30 @@ class Bamba(nn.Module):
 
     @classmethod
     def from_config(cls, config: BambaConfig) -> "Bamba":
+        """
+        Creates a Bamba model from a configuration object.
+
+        Args:
+            config (BambaConfig): The configuration for the Bamba model.
+
+        Returns:
+            Bamba: The Bamba model.
+        """
         return cls(config)
 
     def get_config(self) -> BambaConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            BambaConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         self.head.weight.data.normal_(
             0,
             1 / math.sqrt(math.sqrt(self.config.emb_dim * self.config.src_vocab_size)),
@@ -409,6 +528,9 @@ class Bamba(nn.Module):
         self.base_model.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps, such as tying the embedding and output heads.
+        """
         # if this model ties weights, they are tied here
         if self.config.tie_heads:
             # handle assignment of non-meta weights to meta parameters
@@ -430,6 +552,22 @@ class Bamba(nn.Module):
         only_last_token: bool = False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the Bamba model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            past_key_value_states (Optional[List[Union[SSMCacheUnit, Tuple[torch.FloatTensor,]]]]):
+                The past key-value states for caching.
+            use_cache (bool): Whether to use caching.
+            only_last_token (bool): Whether to only return the predictions for the last token.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, List[Union[SSMCacheUnit, Tuple[torch.FloatTensor,]]]]]:
+                The output predictions, and the new cache if use_cache is True.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x,
             position_ids=position_ids,
@@ -458,6 +596,16 @@ _architecture_name = "bamba"
 
 
 def _bamba_factory_factory(config):
+    """
+    A factory function that creates a factory function for a Bamba model with a given configuration.
+
+    Args:
+        config (BambaConfig): The configuration for the Bamba model.
+
+    Returns:
+        Callable: A factory function that creates a Bamba model.
+    """
+
     def factory(**kwargs):
         return Bamba(config, **kwargs)
 
@@ -493,6 +641,16 @@ models.register_model(
 
 
 def _hf_to_fms_names(input_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face model state dictionary names to FMS model state dictionary names.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     replacements = [
         (r"^lm_head.weight", "head.weight"),
         (r"^model.embed_tokens.weight", "base_model.embedding.weight"),
@@ -528,6 +686,15 @@ serialization.register_adapter_step("bamba", "hf_to_fms_names", _hf_to_fms_names
 
 
 def _get_rope_params(linear_type: str) -> list[str]:
+    """
+    Returns the list of RoPE parameters for a given linear layer type.
+
+    Args:
+        linear_type (str): The type of linear layer.
+
+    Returns:
+        list[str]: The list of RoPE parameters.
+    """
     if "gptq" in linear_type:
         return ["qweight", "scales", "qzeros", "bias"]
     else:  # torch.nn.Linear
@@ -537,6 +704,17 @@ def _get_rope_params(linear_type: str) -> list[str]:
 def _hf_to_fms_rope(
     input_sd: Mapping[str, Any], model_config: Optional[BambaConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face RoPE parameters to FMS RoPE parameters.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[BambaConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     new_sd = {}
 
     if model_config:
@@ -605,6 +783,17 @@ serialization.register_adapter_step("bamba", "hf_to_fms_rope", _hf_to_fms_rope)
 def _weight_fusion(
     input_sd: Mapping[str, Any], model_config: Optional[BambaConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Fuses weights in the state dictionary if the model configuration specifies it.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[BambaConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The state dictionary with fused weights.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -624,6 +813,20 @@ serialization.register_adapter_step("bamba", "weight_fusion", _weight_fusion)
 def _hf_gptq_bamba_check(
     input_sd: Mapping[str, Any], model_config: Optional[BambaConfig] = None, **kwargs
 ) -> Mapping[str, Any]:
+    """
+    Checks if a GPTQ Hugging Face Bamba checkpoint can be loaded into a model with fused weights.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[BambaConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The input state dictionary.
+
+    Raises:
+        ValueError: If a GPTQ HF Bamba checkpoint is being loaded into a model with fused weights.
+    """
     has_fused_weights = True
     linear_type = "torch_linear"
     if model_config:

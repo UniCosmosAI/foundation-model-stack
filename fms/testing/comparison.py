@@ -8,7 +8,16 @@ from torch import nn
 
 @dataclasses.dataclass
 class ModelSignatureParams:
-    """Model Signature params dataclass for readability"""
+    """
+    Model Signature params dataclass for readability.
+
+    Attributes:
+        model (nn.Module): The model to generate a signature for.
+        params (Union[int, List[str]]): The parameters to use for the signature.
+        other_params (Optional[Dict]): Other parameters to pass to the model's forward method.
+        logits_getter_fn (Optional[Callable]): A function to get the logits from the model's output.
+        inp (Optional[torch.LongTensor]): The input tensor to use.
+    """
 
     model: nn.Module
     params: Union[int, List[str]]
@@ -19,7 +28,9 @@ class ModelSignatureParams:
 
 @dataclasses.dataclass
 class HFModelSignatureParams(ModelSignatureParams):
-    """Specific form of model Signature params which defaults the other params and logits getter to take what hf requires"""
+    """
+    Specific form of model Signature params which defaults the other params and logits getter to take what hf requires.
+    """
 
     other_params: Optional[Dict] = dataclasses.field(
         default_factory=lambda: {"return_dict": True}
@@ -35,31 +46,22 @@ def get_signature(
     logits_getter_fn: Optional[Callable] = None,
     device: Union[int, str] = "cpu",
 ) -> List[float]:
-    """Takes a model, and the number of inputs / named parameters it expects in a forward pass and returns a compressed
-    signature that acts as an effective tool for output correctness checking within some tolerance
+    """
+    Takes a model, and the number of inputs / named parameters it expects in a forward pass and returns a compressed
+    signature that acts as an effective tool for output correctness checking within some tolerance.
 
-    Note: signatures will always be created with fp32 precision
+    Note: signatures will always be created with fp32 precision.
 
-    Parameters
-    ----------
-    model: nn.Module
-        the model to use to produce a signature
-    params: int or list(str), optional
-        the params to set to the default tensor value (inp). If an integer, will use *args, if a list, will use **kwargs (default is 1)
-    inp: torch.LongTensor, optional
-        the input to use for params. If not given, torch.arange(0, 16).unsqueeze(0) will be used. (default is None)
-    optional_params: dict, optional
-        optional params to pass to the model forward. If model forward does not contain one of the other_params, it will be
-        ignored. (default is None)
-    logits_getter_fn: Callable, optional
-        function which given the output of forward, will return the logits as a torch.Tensor
-    device: int or str, optional
-        the device to use (default is cpu)
+    Args:
+        model (nn.Module): The model to use to produce a signature.
+        params (Union[int, List[str]]): The params to set to the default tensor value (inp). If an integer, will use *args, if a list, will use **kwargs. Defaults to 1.
+        inp (Optional[torch.LongTensor]): The input to use for params. If not given, torch.arange(0, 16).unsqueeze(0) will be used. Defaults to None.
+        optional_params (Optional[dict]): Optional params to pass to the model forward. If model forward does not contain one of the other_params, it will be ignored. Defaults to None.
+        logits_getter_fn (Optional[Callable]): Function which given the output of forward, will return the logits as a torch.Tensor.
+        device (Union[int, str]): The device to use. Defaults to "cpu".
 
-    Returns
-    -------
-    list(float)
-        list of floats denoting the signature of the model given the input
+    Returns:
+        List[float]: A list of floats denoting the signature of the model given the input.
     """
     model.eval()
 
@@ -109,19 +111,14 @@ def compare_model_signatures(
     atol: float = 1e-3,
     rtol: float = 1e-5,
 ):
-    """This utility function will compare the signature between 2 models using np.allclose
+    """
+    This utility function will compare the signature between 2 models using np.allclose.
 
-    Parameters
-    ----------
-
-    model_params_1: ModelSignatureParam
-        set of params to generate first signature
-
-    model_params_2: ModelSignatureParam
-        set of params to generate second signature
-
-    atol: float, optional
-        The absolute tolerance (default is 1e-3)
+    Args:
+        model_params_1 (ModelSignatureParams): Set of params to generate first signature.
+        model_params_2 (ModelSignatureParams): Set of params to generate second signature.
+        atol (float): The absolute tolerance. Defaults to 1e-3.
+        rtol (float): The relative tolerance. Defaults to 1e-5.
     """
     model_params_1.model.eval()
     model_params_2.model.eval()

@@ -41,6 +41,32 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MpnetConfig(ModelConfig):
+    """
+    Configuration for the MPNet model.
+
+    Args:
+        src_vocab_size (int): The size of the source vocabulary.
+        emb_dim (int): The embedding dimension.
+        nlayers (int): The number of layers in the model.
+        nheads (int): The number of attention heads.
+        intermediate_size (int): The intermediate size of the feed-forward network.
+        activation_fn (str): The activation function to use.
+        hidden_dropout_prob (float): The dropout probability for hidden layers.
+        p_dropout (float): The dropout probability for attention layers.
+        max_expected_seq_len (int): The maximum expected sequence length.
+        initializer_range (float): The range for the initializer.
+        multiquery_attn (bool): Whether to use multi-query attention.
+        layer_norm_eps (float): The epsilon value for layer normalization.
+        hidden_grow_factor (float): The growth factor for the hidden layer in the feed-forward network.
+        relative_attention_num_buckets (int): The number of buckets for relative attention.
+        tie_heads (bool): Whether to tie the embedding and output heads.
+        pad_id (int): The ID of the padding token.
+        bos_token_id (int): The ID of the beginning-of-sequence token.
+        eos_token_id (int): The ID of the end-of-sequence token.
+        linear_config (Optional[Mapping[str, Any]]): The configuration for the linear layers.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     src_vocab_size: int = 30_527
     emb_dim: int = 768
     nlayers: int = 12
@@ -64,6 +90,13 @@ class MpnetConfig(ModelConfig):
 
 
 class MpnetBlock(nn.Module):
+    """
+    A single block of the MPNet model.
+
+    Args:
+        config (MpnetConfig): The configuration for the MPNet model.
+    """
+
     def __init__(self, config: MpnetConfig):
         super().__init__()
         self.config = config
@@ -101,6 +134,17 @@ class MpnetBlock(nn.Module):
         position_ids=None,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the MpnetBlock.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.LongTensor]): The position IDs for the input tensor.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         residual = x
         x = self.attn(
             q=x,
@@ -118,6 +162,15 @@ class MpnetBlock(nn.Module):
 
 
 class MpnetHeadless(nn.Module):
+    """
+    The MPNet model without the language model head.
+
+    Args:
+        config (Optional[MpnetConfig]): The configuration for the MPNet model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[MpnetConfig] = None,
@@ -167,6 +220,17 @@ class MpnetHeadless(nn.Module):
 
     @staticmethod
     def relative_position_bucket(relative_position, num_buckets=32, max_distance=128):
+        """
+        Computes the relative position bucket.
+
+        Args:
+            relative_position (torch.Tensor): The relative position.
+            num_buckets (int): The number of buckets.
+            max_distance (int): The maximum distance.
+
+        Returns:
+            torch.Tensor: The relative position bucket.
+        """
         ret = 0
         n = -relative_position
 
@@ -196,6 +260,16 @@ class MpnetHeadless(nn.Module):
         return ret
 
     def compute_position_bias(self, x, num_buckets=32):
+        """
+        Computes the position bias.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            num_buckets (int): The number of buckets.
+
+        Returns:
+            torch.Tensor: The position bias.
+        """
         bsz, qlen, klen = x.size(0), x.size(1), x.size(1)
         device = x.device
         context_position = torch.arange(qlen, dtype=torch.long, device=device)[:, None]
@@ -213,6 +287,9 @@ class MpnetHeadless(nn.Module):
         return values
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         for layer in ["word_embedding", "position_embeddings"]:
             nn.init.normal_(
                 getattr(self, layer).weight,
@@ -230,6 +307,17 @@ class MpnetHeadless(nn.Module):
         position_ids,
         **kwargs,
     ):
+        """
+        Forward pass for the MpnetHeadless model.
+
+        Args:
+            x_in (torch.Tensor): The input tensor.
+            position_ids (torch.Tensor): The position IDs.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         kwargs["attn_name"] = kwargs.get("attn_name", "sdpa_bidirectional")
         inputs_embeds = self.word_embedding(x_in)
 
@@ -281,6 +369,15 @@ class MpnetHeadless(nn.Module):
 
 
 class Mpnet(nn.Module):
+    """
+    The MPNet model.
+
+    Args:
+        config (Optional[MpnetConfig]): The configuration for the MPNet model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[MpnetConfig] = None,
@@ -300,12 +397,30 @@ class Mpnet(nn.Module):
 
     @classmethod
     def from_config(cls, config: MpnetConfig) -> "Mpnet":
+        """
+        Creates an Mpnet model from a configuration object.
+
+        Args:
+            config (MpnetConfig): The configuration for the Mpnet model.
+
+        Returns:
+            Mpnet: The Mpnet model.
+        """
         return cls(config)
 
     def get_config(self) -> MpnetConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            MpnetConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         self.base_model.reset_parameters()
 
     def forward(
@@ -314,6 +429,17 @@ class Mpnet(nn.Module):
         position_ids: Optional[torch.Tensor] = None,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the Mpnet model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            position_ids (Optional[torch.Tensor]): The position IDs.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The sequence output and the pooled output.
+        """
         get_attention_type(**attn_kwargs)["validate_attn_kwargs"](
             input_ids=x, position_ids=position_ids, **attn_kwargs
         )
@@ -335,6 +461,16 @@ _architecture_name = "mpnet"
 
 
 def _mpnet_factory_factory(config):
+    """
+    A factory function that creates a factory function for an Mpnet model with a given configuration.
+
+    Args:
+        config (MpnetConfig): The configuration for the Mpnet model.
+
+    Returns:
+        Callable: A factory function that creates an Mpnet model.
+    """
+
     def factory(**kwargs):
         return Mpnet(config, **kwargs)
 
@@ -365,6 +501,17 @@ models.register_model(_architecture_name, "v2", _mpnet_factory_factory(_v2_confi
 def _weight_fusion(
     input_sd: Mapping, model_config: Optional[MpnetConfig] = None, **kwargs
 ):
+    """
+    Performs weight fusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping): The input state dictionary.
+        model_config (Optional[MpnetConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config and not model_config.fused_weights:
         has_fused_weights = False
@@ -379,6 +526,16 @@ serialization.register_adapter_step(_architecture_name, "weight_fusion", _weight
 
 
 def _hf_to_fms_names(hf_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face MPNet state dictionary names to FMS MPNet state dictionary names.
+
+    Args:
+        hf_sd (Mapping[str, Any]): The Hugging Face state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The FMS state dictionary.
+    """
     replacements = [
         (
             r"embeddings.word_embeddings.weight",

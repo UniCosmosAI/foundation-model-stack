@@ -85,6 +85,21 @@ _granite_3_2_2b_grid = [
 
 @dataclass
 class LlavaNextConfig(ModelConfig):
+    """
+    Configuration for the LlavaNext model.
+
+    Args:
+        vision_config (SiglipVisionConfig): The configuration for the vision model.
+        text_config (GraniteConfig): The configuration for the text model.
+        image_token_index (int): The index of the image token.
+        projector_hidden_act (str): The activation function for the projector.
+        vision_feature_select_strategy (str): The strategy for selecting vision features.
+        vision_feature_layer (list): The layer(s) from which to select vision features.
+        image_grid_pinpoints (list): The grid pinpoints for the image.
+        multimodal_projector_bias (bool): Whether to use bias in the multimodal projector.
+        fused_weights (bool): Whether to use fused weights.
+    """
+
     # Defaults to Granite-vision-3.2-2b
     vision_config: SiglipVisionConfig = field(
         default_factory=lambda: _granite_3_2_2b_vision_config
@@ -102,6 +117,13 @@ class LlavaNextConfig(ModelConfig):
 
 
 class LlavaNextMultiModalProjector(nn.Module):
+    """
+    The multi-modal projector for the LlavaNext model.
+
+    Args:
+        config (LlavaNextConfig): The configuration for the LlavaNext model.
+    """
+
     def __init__(self, config: LlavaNextConfig):
         super().__init__()
         num_feature_layers = (
@@ -124,6 +146,9 @@ class LlavaNextMultiModalProjector(nn.Module):
 
     # NOTE: HF doesn't do weight initialization for LlavaNextMultiModalProjector
     def reset_parameters(self):
+        """
+        Resets the parameters of the multi-modal projector.
+        """
         nn.init.xavier_uniform_(self.linear_1.weight)
         nn.init.xavier_uniform_(self.linear_2.weight)
         if self.config.multimodal_projector_bias:
@@ -131,6 +156,15 @@ class LlavaNextMultiModalProjector(nn.Module):
             nn.init.normal_(self.linear_2.bias, std=1e-6)
 
     def forward(self, image_features):
+        """
+        Forward pass for the multi-modal projector.
+
+        Args:
+            image_features (torch.Tensor): The image features.
+
+        Returns:
+            torch.Tensor: The projected hidden states.
+        """
         hidden_states = self.linear_1(image_features)
         hidden_states = self.act(hidden_states)
         hidden_states = self.linear_2(hidden_states)
@@ -138,6 +172,15 @@ class LlavaNextMultiModalProjector(nn.Module):
 
 
 class LlavaNext(nn.Module):
+    """
+    The LlavaNext model.
+
+    Args:
+        config (Optional[LlavaNextConfig]): The configuration for the LlavaNext model.
+        distributed_strategy (DistributedStrategy): The distributed strategy to use.
+        **kwargs: Additional keyword arguments to update the configuration.
+    """
+
     def __init__(
         self,
         config: Optional[LlavaNextConfig] = None,
@@ -183,22 +226,53 @@ class LlavaNext(nn.Module):
 
     @classmethod
     def from_config(cls, config: LlavaNextConfig) -> "LlavaNext":
+        """
+        Creates a LlavaNext model from a configuration object.
+
+        Args:
+            config (LlavaNextConfig): The configuration for the LlavaNext model.
+
+        Returns:
+            LlavaNext: The LlavaNext model.
+        """
         return cls(config)
 
     def get_config(self) -> LlavaNextConfig:
+        """
+        Returns the configuration of the model.
+
+        Returns:
+            LlavaNextConfig: The configuration of the model.
+        """
         return self.config
 
     def reset_parameters(self):
+        """
+        Resets the parameters of the model.
+        """
         nn.init.xavier_uniform_(self.image_newline.data)
         self.langauage_model.reset_parameters()
         self.vision_tower.reset_parameters()
         self.multi_modal_projector.reset_parameters()
 
     def post_init(self):
+        """
+        Performs post-initialization steps.
+        """
         self.language_model.post_init()
         self.vision_tower.post_init()
 
     def unpad_image(self, tensor: torch.Tensor, original_image_size: torch.Tensor):
+        """
+        Unpads an image tensor to its original size.
+
+        Args:
+            tensor (torch.Tensor): The padded image tensor.
+            original_image_size (torch.Tensor): The original size of the image.
+
+        Returns:
+            torch.Tensor: The unpadded image tensor.
+        """
         if not isinstance(original_image_size, (list, tuple)):
             original_size = original_image_size.tolist()
         original_height, original_width = original_size
@@ -226,6 +300,16 @@ class LlavaNext(nn.Module):
         original_image_size: torch.Tensor,
         possible_resolutions: list[Tuple[int, int]],
     ):
+        """
+        Selects the best resolution from a list of possible resolutions.
+
+        Args:
+            original_image_size (torch.Tensor): The original size of the image.
+            possible_resolutions (list[Tuple[int, int]]): A list of possible resolutions.
+
+        Returns:
+            Tuple[int, int]: The best resolution.
+        """
         if not isinstance(original_image_size, (list, tuple)):
             original_size = original_image_size.tolist()
 
@@ -261,6 +345,17 @@ class LlavaNext(nn.Module):
         grid_pinpoints: list[Tuple[int, int]],
         patch_size: int,
     ):
+        """
+        Converts an image size to the number of patches.
+
+        Args:
+            image_size (torch.Tensor): The size of the image.
+            grid_pinpoints (list[Tuple[int, int]]): The grid pinpoints for the image.
+            patch_size (int): The size of the patches.
+
+        Returns:
+            int: The number of patches.
+        """
         height, width = self.select_best_resolution(image_size, grid_pinpoints)
         num_patches = 1 + math.ceil(height / patch_size) * math.ceil(width / patch_size)
         return num_patches
@@ -271,6 +366,16 @@ class LlavaNext(nn.Module):
         pixel_values: torch.Tensor,
         image_sizes: torch.Tensor,
     ):
+        """
+        Gets the image features from the vision tower.
+
+        Args:
+            pixel_values (torch.Tensor): The pixel values of the images.
+            image_sizes (torch.Tensor): The sizes of the images.
+
+        Returns:
+            list[torch.Tensor]: The image features.
+        """
         # ! infer image_num_patches from image_sizes
         image_num_patches = [
             self.image_size_to_num_patches(
@@ -319,6 +424,17 @@ class LlavaNext(nn.Module):
         image_sizes: torch.Tensor,
         image_newline: Optional[torch.Tensor] = None,
     ):
+        """
+        Packs the image features.
+
+        Args:
+            image_features (list[torch.Tensor]): The image features.
+            image_sizes (torch.Tensor): The sizes of the images.
+            image_newline (Optional[torch.Tensor]): The image newline token.
+
+        Returns:
+            torch.Tensor: The packed image features.
+        """
         new_image_features = []
 
         for image_idx, image_feature in enumerate(image_features):
@@ -371,6 +487,19 @@ class LlavaNext(nn.Module):
         use_cache: Optional[bool] = False,
         **attn_kwargs: Unpack[AttentionKwargs],
     ):
+        """
+        Forward pass for the LlavaNext model.
+
+        Args:
+            input_ids_or_embeds (torch.Tensor): The input IDs or embeddings.
+            position_ids (Optional[torch.Tensor]): The position IDs.
+            past_key_value_states (Optional[Tuple[torch.FloatTensor,]]): The past key-value states.
+            use_cache (Optional[bool]): Whether to use the cache.
+            **attn_kwargs (Unpack[AttentionKwargs]): Additional keyword arguments for the attention layer.
+
+        Returns:
+            The output of the language model.
+        """
         outputs = self.language_model(
             input_ids_or_embeds,
             position_ids=position_ids,
@@ -386,6 +515,17 @@ class LlavaNext(nn.Module):
         input_ids,
         kwargs,
     ):
+        """
+        Prepares the inputs for generation.
+
+        Args:
+            iteration (int): The current iteration.
+            input_ids (torch.Tensor): The input IDs.
+            kwargs (dict): Additional keyword arguments.
+
+        Returns:
+            Tuple[torch.Tensor, dict]: The prepared inputs and keyword arguments.
+        """
         # Use with arg `prepare_model_inputs_hook=model.prepare_inputs_for_generation` when calling generate()
 
         if kwargs["use_cache"] and iteration > 0:
@@ -431,6 +571,16 @@ _architecture_name = "llava_next"
 
 
 def _llava_next_factory_factory(config):
+    """
+    A factory function that creates a factory function for a LlavaNext model with a given configuration.
+
+    Args:
+        config (LlavaNextConfig): The configuration for the LlavaNext model.
+
+    Returns:
+        Callable: A factory function that creates a LlavaNext model.
+    """
+
     def factory(**kwargs):
         return LlavaNext(config, **kwargs)
 
@@ -447,6 +597,17 @@ models.register_model(
 def _weight_fusion(
     input_sd: Mapping, model_config: Optional[LlavaNextConfig] = None, **kwargs
 ):
+    """
+    Performs weight fusion on the state dictionary.
+
+    Args:
+        input_sd (Mapping): The input state dictionary.
+        model_config (Optional[LlavaNextConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping: The modified state dictionary.
+    """
     has_fused_weights = True
     if model_config:
         if not model_config.fused_weights:
@@ -461,6 +622,16 @@ def _weight_fusion(
 
 
 def _hf_to_fms_names(input_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face model state dictionary names to FMS model state dictionary names.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     replacements = [
         # vision
         (r"vision_tower\.vision_model\.head", "vision_tower.head"),
@@ -505,6 +676,15 @@ def _hf_to_fms_names(input_sd: Mapping[str, Any], **kwargs) -> Mapping[str, Any]
 
 # From Granite model
 def _get_rope_params(linear_type: str) -> list[str]:
+    """
+    Returns the list of RoPE parameters for a given linear layer type.
+
+    Args:
+        linear_type (str): The type of linear layer.
+
+    Returns:
+        list[str]: The list of RoPE parameters.
+    """
     if "gptq" in linear_type:
         return ["qweight", "scales", "qzeros", "bias"]
     if "int8" in linear_type:
@@ -520,6 +700,17 @@ def _hf_to_fms_rope(
     model_config=None,
     **kwargs,
 ) -> Mapping[str, Any]:
+    """
+    Converts Hugging Face RoPE parameters to FMS RoPE parameters.
+
+    Args:
+        input_sd (Mapping[str, Any]): The input state dictionary.
+        model_config (Optional[LlavaNextConfig]): The model configuration.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Mapping[str, Any]: The converted state dictionary.
+    """
     new_sd = {}
     if model_config:
         model_config = model_config.text_config

@@ -9,6 +9,19 @@ import triton.language as tl  # type: ignore[import-untyped]
 
 @triton.jit()
 def col_major(pid, m, n, block_m: tl.constexpr, block_n: tl.constexpr):
+    """
+    Compute the column-major grid traversal.
+
+    Args:
+        pid (int): The program ID.
+        m (int): The number of rows.
+        n (int): The number of columns.
+        block_m (tl.constexpr): The block size for rows.
+        block_n (tl.constexpr): The block size for columns.
+
+    Returns:
+        Tuple[int, int]: The row and column indices.
+    """
     grid_m = tl.cdiv(m, block_m)
     pid_m = pid % grid_m
     pid_n = pid // grid_m
@@ -16,6 +29,17 @@ def col_major(pid, m, n, block_m: tl.constexpr, block_n: tl.constexpr):
 
 
 def filter_padding_size(configs, named_args, **kwargs):
+    """
+    Filter the configs by padding size.
+
+    Args:
+        configs (list): The list of configs.
+        named_args (dict): The named arguments.
+        **kwargs: The keyword arguments.
+
+    Returns:
+        list: The filtered configs.
+    """
     if "padding_size" in named_args or "padding_size" in kwargs:
         padding_size = named_args.get("padding_size", kwargs.get("padding_size", None))
         return [
@@ -160,6 +184,20 @@ def invoke_fused_moe_kernel(
     top_k: int,
     padding_size: int,
 ):
+    """
+    Invoke the fused MoE kernel.
+
+    Args:
+        A (torch.Tensor): The input tensor.
+        B (torch.Tensor): The expert weights.
+        C (torch.Tensor): The output tensor.
+        token_expert_mapping (torch.Tensor): The token to expert mapping.
+        padded_token_ids_per_block (torch.Tensor): The padded token IDs per block.
+        expert_block_mapping (torch.Tensor): The expert to block mapping.
+        total_padded_tokens (torch.Tensor): The total number of padded tokens.
+        top_k (int): The number of experts to use for each token.
+        padding_size (int): The padding size.
+    """
     assert A.is_contiguous()
     assert B.is_contiguous()
     assert C.is_contiguous()

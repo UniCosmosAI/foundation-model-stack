@@ -29,6 +29,7 @@ _instruction_nocontext_template = """Below is an instruction that describes a ta
 
 class JsonInstructions(Dataset):
     """
+    A dataset that loads instructions from a JSON file.
     Expects a json file containing rows of the form:
     {
         "instruction":"a question or request made to the model",
@@ -37,6 +38,12 @@ class JsonInstructions(Dataset):
     }
     This is the same format as used in the Alpaca dataset:
     https://github.com/tatsu-lab/stanford_alpaca/blob/main/alpaca_data.json
+
+    Args:
+        path (str): The path to the JSON file.
+        tokenizer (tokenizers.BaseTokenizer): The tokenizer to use.
+        max_len (int): The maximum length of the tokenized sequence.
+        ignore_index (int): The index to ignore in the loss function.
     """
 
     def __init__(
@@ -61,9 +68,24 @@ class JsonInstructions(Dataset):
             self.instructions = json.loads(text)
 
     def __len__(self):
+        """
+        Get the number of instructions in the dataset.
+
+        Returns:
+            int: The number of instructions.
+        """
         return len(self.instructions)
 
     def make_prompt(self, instruction: Dict) -> str:
+        """
+        Create a prompt from an instruction.
+
+        Args:
+            instruction (Dict): The instruction dictionary.
+
+        Returns:
+            str: The created prompt.
+        """
         if "input" in instruction:
             prompt = _instruction_template.format_map(instruction)
         else:
@@ -71,6 +93,15 @@ class JsonInstructions(Dataset):
         return prompt
 
     def __getitem__(self, index):
+        """
+        Get an item from the dataset.
+
+        Args:
+            index (int): The index of the item.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The input and label tensors.
+        """
         instruction = self.instructions[index]
         prompt = self.make_prompt(instruction)
         prompt = self.tokenizer.tokenize(prompt)

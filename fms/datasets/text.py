@@ -14,6 +14,13 @@ class CausalTextDatasetFromString(Dataset):
     Since all data comes from a single text, there are no bos/eos tokens used.
     A pad token if specified, is used only on the final row. i.e.
     `pad_token=None` is similar to drop_last in DataLoader.
+
+    Args:
+        text (str): The text to create the dataset from.
+        tokenizer (tokenizers.BaseTokenizer): The tokenizer to use.
+        seq_len (int): The sequence length.
+        pad_token (Optional[str]): The padding token.
+        ignore_index (int): The index to ignore in the loss function.
     """
 
     def __init__(
@@ -36,6 +43,15 @@ class CausalTextDatasetFromString(Dataset):
         self.seq_len = seq_len
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get an item from the dataset.
+
+        Args:
+            idx (int): The index of the item.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The input and label tensors.
+        """
         start_idx = idx * self.seq_len
         end_idx = start_idx + self.seq_len + 1
         if end_idx >= self.ids.shape[0]:
@@ -51,6 +67,12 @@ class CausalTextDatasetFromString(Dataset):
         return input, label
 
     def __len__(self):
+        """
+        Get the number of items in the dataset.
+
+        Returns:
+            int: The number of items in the dataset.
+        """
         tokens = self.ids.shape[0]
         if tokens % self.seq_len == 0 or self.pad_id is None:
             return tokens // self.seq_len
@@ -61,6 +83,18 @@ class CausalTextDatasetFromString(Dataset):
 def causaltext(
     path_or_uri: str, tokenizer: tokenizers.BaseTokenizer, *, pad_token=None, **kwargs
 ) -> Dataset:
+    """
+    Create a CausalTextDatasetFromString from a path or URI.
+
+    Args:
+        path_or_uri (str): The path or URI to the text file.
+        tokenizer (tokenizers.BaseTokenizer): The tokenizer to use.
+        pad_token (Optional[str]): The padding token.
+        **kwargs: Additional arguments for CausalTextDatasetFromString.
+
+    Returns:
+        Dataset: The created dataset.
+    """
     if urllib.parse.urlparse(path_or_uri).scheme == "":
         with open(path_or_uri) as f:
             text = f.read()
@@ -79,7 +113,14 @@ __shakespeare_url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/
 
 def shakespeare(pad_token=None, tokenizer=tokenizers.char_tokenizer) -> Dataset:
     """
-    get a dataset of the complete works of shakespeare
+    Get a dataset of the complete works of shakespeare.
+
+    Args:
+        pad_token (Optional[str]): The padding token.
+        tokenizer: The tokenizer to use.
+
+    Returns:
+        Dataset: The Shakespeare dataset.
     """
     # TODO: maybe this should cache somewhere?
     return causaltext(

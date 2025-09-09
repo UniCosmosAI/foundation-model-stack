@@ -3,6 +3,15 @@ import torch.nn as nn
 
 
 def _maybe_unfuse_weights(module: nn.Module):
+    """
+    Unfuses the weights of a module if the module supports it.
+
+    Args:
+        module (nn.Module): The module to unfuse.
+
+    Returns:
+        nn.Module: The unfused module, or the original module if it does not support unfusion.
+    """
     if hasattr(module, "unfuse_weights") and callable(module.unfuse_weights):
         result = module.unfuse_weights()
         del module
@@ -12,17 +21,14 @@ def _maybe_unfuse_weights(module: nn.Module):
 
 
 def apply_unfuse_weights(module: nn.Module) -> nn.Module:
-    """When applied to a module, will unfuse modules that support the unfuse_weights method
+    """
+    When applied to a module, will unfuse modules that support the unfuse_weights method.
 
-    Parameters
-    ----------
-    module: nn.Module
-        the module to unfuse
+    Args:
+        module (nn.Module): The module to unfuse.
 
-    Returns
-    -------
-    nn.Module
-        the original module unfused
+    Returns:
+        nn.Module: The original module unfused.
     """
     with torch.no_grad():
         wrapped = _maybe_unfuse_weights(module)

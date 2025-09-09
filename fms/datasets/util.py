@@ -4,6 +4,15 @@ from torch.utils.data import Dataset, IterableDataset
 
 
 def _state_dict_save_helper(target):
+    """
+    A helper function to save the state of a dataset.
+
+    Args:
+        target: The object to save the state of.
+
+    Returns:
+        dict: The state dictionary.
+    """
     if isinstance(target, dict):
         dict_attrs = target
     elif hasattr(target, "__dict__"):
@@ -39,6 +48,13 @@ def _state_dict_save_helper(target):
 
 
 def _state_dict_load_helper(target, state_dict):
+    """
+    A helper function to load the state of a dataset.
+
+    Args:
+        target: The object to load the state into.
+        state_dict (dict): The state dictionary to load.
+    """
     if isinstance(target, dict):
         dict_attrs = target
     else:
@@ -79,38 +95,70 @@ class SavableDataset:
     """
 
     def state_dict(self):
+        """
+        Get the state of the dataset.
+
+        Returns:
+            dict: The state dictionary.
+        """
         return _state_dict_save_helper(self)
 
-    # In cases where the instance of SavableDataset composes another
-    # DataSet, an explicit implementation of this function will be needed.
-    # This default implementation doesn't know the type of the serialized
-    # dataset, so can't construct it.
     def load_state_dict(self, state_dict):
+        """
+        Load the state of the dataset.
+
+        Args:
+            state_dict (dict): The state dictionary to load.
+        """
         _state_dict_load_helper(self, state_dict)
 
 
 class RestartableFromMapDataset(SavableDataset, IterableDataset):
+    """
+    A restartable iterable dataset from a map-style dataset.
+
+    Args:
+        map_ds (Dataset): The map-style dataset.
+    """
+
     def __init__(self, map_ds: Dataset):
         super().__init__()
         self._map_ds = map_ds
         self.current_index = 0
 
     def __iter__(self):
+        """
+        Iterate over the dataset.
+        """
         for index in range(self.current_index, len(self._map_ds)):
             self.current_index = index + 1
             yield self._map_ds[index]
 
     def __len__(self):
+        """
+        Get the number of items in the dataset.
+        """
         return len(self._map_ds)
 
 
 class PackedSequenceDataset(Dataset, SavableDataset):
+    """
+    A dataset that packs sequences to a maximum length.
+
+    Args:
+        dataset (SavableDataset): The dataset to pack.
+        max_seq_len (int): The maximum sequence length.
+    """
+
     def __init__(self, dataset: SavableDataset, max_seq_len: int):
         self.dataset = dataset
         self.max_seq_len = max_seq_len
         self.buffer: List[Any] = []
 
     def __iter__(self):
+        """
+        Iterate over the dataset.
+        """
         for example in self.dataset:
             self.buffer.extend(example)
             while len(self.buffer) >= self.max_seq_len:
@@ -120,6 +168,15 @@ class PackedSequenceDataset(Dataset, SavableDataset):
 
 
 class WithSeparatorDataset(Dataset, SavableDataset):
+    """
+    A dataset that adds separator tokens to the beginning and end of each sequence.
+
+    Args:
+        dataset (SavableDataset): The dataset to wrap.
+        bos_token_id (Optional[int]): The beginning-of-sequence token ID.
+        eos_token_id (Optional[int]): The end-of-sequence token ID.
+    """
+
     def __init__(
         self,
         dataset: SavableDataset,
@@ -131,6 +188,9 @@ class WithSeparatorDataset(Dataset, SavableDataset):
         self._eos_token_id = eos_token_id
 
     def __iter__(self):
+        """
+        Iterate over the dataset.
+        """
         for example in self.dataset:
             result = []
             if self._bos_token_id is not None:

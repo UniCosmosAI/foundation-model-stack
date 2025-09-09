@@ -10,28 +10,13 @@ def moe_align_block_size(
     """
     Aligns the token distribution across experts to be compatible with block size for matrix multiplication.
 
-    Parameters:
-    - topk_ids: A tensor of shape [total_tokens, top_k] representing the top-k expert indices for each token.
-    - block_size: The block size used in block matrix multiplication.
-    - num_experts: The total number of experts.
+    Args:
+        topk_ids (torch.Tensor): A tensor of shape [total_tokens, top_k] representing the top-k expert indices for each token.
+        block_size (int): The block size used in block matrix multiplication.
+        num_experts (int): The total number of experts.
 
     Returns:
-    - sorted_token_ids: A tensor containing the sorted token indices according to their allocated expert.
-    - expert_ids: A tensor indicating the assigned expert index for each block.
-    - num_tokens_post_padded: The total number of tokens after padding, ensuring divisibility by block_size.
-
-    This function pads the number of tokens that each expert needs to process so that it is divisible by block_size.
-    Padding ensures that during block matrix multiplication, the dimensions align correctly.
-
-    Example:
-    Given topk_ids = [[2, 3, 4], [1, 2, 4], [1, 3, 4], [1, 2, 3]], block_size = 4, and num_experts = 4:
-    - We initially have 12 tokens (after repeating 'top_k' times) and 4 experts, with each expert needing to process 3 tokens.
-    - As block_size is 4, we pad 1 token for each expert.
-    - First, flatten topk_ids to [2, 3, 4, 1, 2, 4, 1, 3, 4, 1, 2, 3].
-    - Then append padding tokens [12, 12, 12, 12] for each block.
-    - After sorting by expert index, we obtain token_ids [3, 6, 9, 12, 0, 4, 10, 12, 1, 7, 11, 12, 2, 5, 8, 12].
-        Tokens 12 are non-existent (padding) and are ignored in the subsequent matrix multiplication.
-    - The padding ensures that the total number of tokens is now divisible by block_size for proper block matrix operations.
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: A tuple containing the sorted token ids, the expert to block mapping, and the total number of padded tokens.
     """
 
     # First count how many tokens go to each expert
@@ -105,6 +90,22 @@ def moe_mm(
     topk: int,
     padding_size: int,
 ) -> torch.Tensor:
+    """
+    A custom op for Mixture of Experts matrix multiplication.
+
+    Args:
+        input (torch.Tensor): The input tensor.
+        moe_matrix (torch.Tensor): The MoE weight matrix.
+        token_expert_mapping (torch.Tensor): A tensor mapping tokens to experts.
+        padded_token_ids_per_block (torch.Tensor): A tensor of padded token IDs per block.
+        expert_block_mapping (torch.Tensor): A tensor mapping experts to blocks.
+        total_padded_tokens (torch.Tensor): The total number of padded tokens.
+        topk (int): The number of top-k experts to use.
+        padding_size (int): The padding size.
+
+    Returns:
+        torch.Tensor: The output tensor.
+    """
     from fms.triton.moe_kernel import invoke_fused_moe_kernel
 
     M, A = token_expert_mapping.shape
@@ -137,6 +138,22 @@ def moe_mm_meta(
     topk: int,
     padding_size,
 ):
+    """
+    A fake implementation of the moe_mm custom op for meta tensors.
+
+    Args:
+        input (torch.Tensor): The input tensor.
+        moe_matrix (torch.Tensor): The MoE weight matrix.
+        token_expert_mapping (torch.Tensor): A tensor mapping tokens to experts.
+        padded_token_ids_per_block (torch.Tensor): A tensor of padded token IDs per block.
+        expert_block_mapping (torch.Tensor): A tensor mapping experts to blocks.
+        total_padded_tokens (torch.Tensor): The total number of padded tokens.
+        topk (int): The number of top-k experts to use.
+        padding_size (int): The padding size.
+
+    Returns:
+        torch.Tensor: The output tensor.
+    """
     M, A = token_expert_mapping.shape
     _, N, _ = moe_matrix.shape
     return torch.empty((M, A, N), device=input.device, dtype=input.dtype)
@@ -144,6 +161,16 @@ def moe_mm_meta(
 
 # TODO: Implement for real
 def moe_mm_backward(ctx, grad_output):
+    """
+    The backward pass for the moe_mm custom op.
+
+    Args:
+        ctx: The context object.
+        grad_output: The gradient of the output.
+
+    Returns:
+        Tuple: The gradients of the inputs.
+    """
     (input_,) = ctx.saved_tensors
     # input, moe_matrix, token_expert_mapping, padded_token_ids_per_block, expert_block_mapping, total_padded_tokens
     return (
@@ -159,6 +186,14 @@ def moe_mm_backward(ctx, grad_output):
 
 
 def moe_mm_setup_context(ctx, inputs, output):
+    """
+    Set up the context for the backward pass of the moe_mm custom op.
+
+    Args:
+        ctx: The context object.
+        inputs: The inputs to the forward pass.
+        output: The output of the forward pass.
+    """
     (
         input_,
         moe_matrix,
@@ -187,6 +222,22 @@ def moe_mm_cpu(
     topk: int,
     padding_size,
 ):
+    """
+    A CPU/MPS implementation of the moe_mm custom op.
+
+    Args:
+        input (torch.Tensor): The input tensor.
+        moe_matrix (torch.Tensor): The MoE weight matrix.
+        token_expert_mapping (torch.Tensor): A tensor mapping tokens to experts.
+        padded_token_ids_per_block (torch.Tensor): A tensor of padded token IDs per block.
+        expert_block_mapping (torch.Tensor): A tensor mapping experts to blocks.
+        total_padded_tokens (torch.Tensor): The total number of padded tokens.
+        topk (int): The number of top-k experts to use.
+        padding_size (int): The padding size.
+
+    Returns:
+        torch.Tensor: The output tensor.
+    """
     T, D = input.shape
     M, A = token_expert_mapping.shape
 

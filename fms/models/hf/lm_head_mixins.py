@@ -41,26 +41,14 @@ class LMHeadMixin:
         """
         Initialize an LMHeadMixin
 
-        Parameters
-        ----------
-        config: PretrainedConfig
-            the model config
-        lm_head: nn.Module, optional
-            If given, the lm_head will simply be set in the underlying architecture. If not given, the lm_head will be
-            created by this class
-        _lm_head_params: dict, optional
-            an optional dictionary of parameters that do not have a standard name in the config, but are required for
-            creation of the empty lm_head
-
-        *args
-            this is used as a passthrough for the mixin
-        **kwargs
-            this is used as a passthrough for the mixin
-
-        Returns
-        -------
-        LMHeadMixin
-            a new LMHeadMixin
+        Args:
+            config (PretrainedConfig): The model config.
+            lm_head (Optional[nn.Module]): If given, the lm_head will simply be set in the underlying architecture.
+                If not given, the lm_head will be created by this class.
+            _lm_head_params (Optional[Dict[str, Any]]): An optional dictionary of parameters that do not have a standard
+                name in the config, but are required for creation of the empty lm_head.
+            *args: Passthrough for the mixin.
+            **kwargs: Passthrough for the mixin.
         """
         self.config = config
         # if lm head was already given, we do not need to create it, otherwise we create a fresh lm_head
@@ -75,36 +63,28 @@ class LMHeadMixin:
     @abc.abstractmethod
     def _get_empty_lm_head(self, **kwargs) -> nn.Module:
         """
-        Get an empty initialized lm_head given specific parameters provided by a child implementation of this class
+        Get an empty initialized lm_head given specific parameters provided by a child implementation of this class.
 
-        Parameters
-        ----------
-        **kwargs
-            if _lm_head_params dict is given in __init__, the child class implementing this method will include those
-            parameters ONLY in these kwargs
+        Args:
+            **kwargs: If _lm_head_params dict is given in __init__, the child class implementing this method will
+                include those parameters ONLY in these kwargs.
 
-        Return
-        ------
-        nn.Module
-            the empty lm head module
+        Returns:
+            nn.Module: The empty lm head module.
         """
         pass
 
     @abc.abstractmethod
     def _compute_loss(self, prediction: torch.Tensor, labels: torch.Tensor) -> _Loss:
-        """compute the loss between predictions/labels
+        """
+        Compute the loss between predictions and labels.
 
-        Parameters
-        ----------
-        prediction: torch.Tensor
-            prediction from a forward step of a module
-        labels: torch.Tensor
-            the labels to compare
+        Args:
+            prediction (torch.Tensor): Prediction from a forward step of a module.
+            labels (torch.Tensor): The labels to compare.
 
-        Returns
-        -------
-        _Loss
-            the loss object computed from the prediction/labels
+        Returns:
+            _Loss: The loss object computed from the prediction/labels.
         """
         pass
 
@@ -115,18 +95,17 @@ class LMHeadMixin:
         *args,
         **kwargs,
     ) -> torch.Tensor:
-        """adapt your given pytorch native lm head to that of the one expected in huggingface. Note: This is not
-        required if your lm_head simply takes in the input_ids and returns a torch.Tensor
+        """
+        Adapt your given pytorch native lm head to that of the one expected in huggingface. Note: This is not
+        required if your lm_head simply takes in the input_ids and returns a torch.Tensor.
 
-        Parameters
-        ----------
-        input_ids: torch.Tensor
-            the downstream input_ids (either from other forward passes or a dataset)
+        Args:
+            input_ids (torch.Tensor): The downstream input_ids (either from other forward passes or a dataset).
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
 
-        Returns
-        -------
-        torch.Tensor
-            the output from the forward function of the lm_head if an lm_head exists
+        Returns:
+            torch.Tensor: The output from the forward function of the lm_head if an lm_head exists.
         """
         return self.lm_head(input_ids)
 
@@ -139,30 +118,35 @@ class LMHeadMixin:
         decoder_outputs: Optional[BaseModelOutputWithPastAndCrossAttentions],
     ) -> ModelOutput:
         """
-        Produce the proper lm head output dataclass given the output from the encoder, decoder, loss, and lm head
+        Produce the proper lm head output dataclass given the output from the encoder, decoder, loss, and lm head.
 
-        Parameters
-        ----------
-        logits: torch.FloatTensor
-            the output logits from the lm head
-        loss: _Loss
-            the loss object returned from _compute_loss
-        encoder_outputs: BaseModelOutputWithPastAndCrossAttentions, optional
-            the output from the encoder (default is None)
-        decoder_outputs: BaseModelOutputWithPastAndCrossAttentions, optional
-            the output from the decoder (default is None)
+        Args:
+            logits (torch.FloatTensor): The output logits from the lm head.
+            loss (_Loss): The loss object returned from _compute_loss.
+            encoder_outputs (Optional[BaseModelOutputWithPastAndCrossAttentions]): The output from the encoder.
+            decoder_outputs (Optional[BaseModelOutputWithPastAndCrossAttentions]): The output from the decoder.
 
-        Returns
-        -------
-        ModelOutput
-            a ModelOutput object based on the task of the lm head
+        Returns:
+            ModelOutput: A ModelOutput object based on the task of the lm head.
         """
         pass
 
     def get_output_embeddings(self):
+        """
+        Get the output embeddings from the lm_head.
+
+        Returns:
+            nn.Module: The lm_head module.
+        """
         return self.lm_head
 
     def set_output_embeddings(self, new_embeddings):
+        """
+        Set the output embeddings of the lm_head.
+
+        Args:
+            new_embeddings (nn.Module): The new lm_head module.
+        """
         self.lm_head = new_embeddings
 
 
@@ -171,17 +155,12 @@ class LMHeadModelLMHeadMixin(LMHeadMixin):
 
     def __init__(self, bias: bool, *args, **kwargs):
         """
-        Initialize a LMHeadModelLMHeadMixin
+        Initialize a LMHeadModelLMHeadMixin.
 
-        Parameters
-        ----------
-        bias: bool
-            vocab bias used in creating the lm_head
-
-        Returns
-        -------
-        LMHeadModelLMHeadMixin
-            a new LMHeadModelLMHeadMixin
+        Args:
+            bias (bool): Vocab bias used in creating the lm_head.
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
         """
         super().__init__(_lm_head_params={"bias": bias}, *args, **kwargs)
 
@@ -219,17 +198,12 @@ class ConditionalGenerationLMHeadMixin(LMHeadMixin):
 
     def __init__(self, bias: bool, *args, **kwargs):
         """
-        Initialize a ConditionalGenerationLMHeadMixin
+        Initialize a ConditionalGenerationLMHeadMixin.
 
-        Parameters
-        ----------
-        bias: bool
-            vocab bias used in creating the lm_head
-
-        Returns
-        -------
-        ConditionalGenerationLMHeadMixin
-            a new ConditionalGenerationLMHeadMixin
+        Args:
+            bias (bool): Vocab bias used in creating the lm_head.
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
         """
         super().__init__(_lm_head_params={"bias": bias}, *args, **kwargs)
 
@@ -287,19 +261,14 @@ class SequenceClassificationLMHeadMixin(LMHeadMixin):
         **kwargs,
     ):
         """
-        Initialize a SequenceClassificationLMHeadMixin
+        Initialize a SequenceClassificationLMHeadMixin.
 
-        Parameters
-        ----------
-        classifier_activation_fn: str
-            the activation function name to use in creating the lm_head. Will be ignored if depth is 0. (default is tanh)
-        classifier_dropout: float
-            the dropout to be used in the lm head (default is 0.1)
-
-        Returns
-        -------
-        SequenceClassificationLMHeadMixin
-            a new SequenceClassificationLMHeadMixin
+        Args:
+            classifier_activation_fn (str): The activation function name to use in creating the lm_head.
+                Will be ignored if depth is 0. (default is tanh)
+            classifier_dropout (float): The dropout to be used in the lm head (default is 0.1).
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
         """
 
         super().__init__(
@@ -367,6 +336,12 @@ class SequenceClassificationLMHeadMixin(LMHeadMixin):
         )
 
     def get_output_embeddings(self):
+        """
+        Get the output embeddings from the lm_head's head.
+
+        Returns:
+            nn.Module: The head of the lm_head module.
+        """
         return self.lm_head.head
 
 
@@ -386,19 +361,14 @@ class MaskedLMHeadMixin(LMHeadMixin):
         **kwargs,
     ):
         """
-        Initialize a MaskedLMHeadMixin
+        Initialize a MaskedLMHeadMixin.
 
-        Parameters
-        ----------
-        activation_fn: str
-            the activation function name to use in creating the lm_head. Will be ignored if depth is 0. (default is gelu)
-        norm_eps: norm_eps
-            norm eps for model
-
-        Returns
-        -------
-        MaskedLMHeadMixin
-            a new MaskedLMHeadMixin
+        Args:
+            activation_fn (str): The activation function name to use in creating the lm_head.
+                Will be ignored if depth is 0. (default is gelu)
+            norm_eps (float): Norm epsilon for the model.
+            *args: Additional arguments.
+            **kwargs: Additional keyword arguments.
         """
         super().__init__(
             _lm_head_params={
@@ -410,6 +380,12 @@ class MaskedLMHeadMixin(LMHeadMixin):
         )
 
     def get_output_embeddings(self):
+        """
+        Get the output embeddings from the lm_head's head.
+
+        Returns:
+            nn.Module: The head of the lm_head module.
+        """
         return self.lm_head.head
 
     def _get_empty_lm_head(self, activation_fn: str, norm_eps: float) -> nn.Module:

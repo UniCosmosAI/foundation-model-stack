@@ -23,6 +23,9 @@ class TrainerPlugin:
     A TrainerPlugin runs once every epoch, and possibly every `steps` steps.
     It is passed relevant objects that can be used for checkpointing, logging,
     or validation.
+
+    Args:
+        steps (Optional[int]): The number of steps between runs.
     """
 
     def __init__(self, steps: Optional[int] = None):
@@ -31,6 +34,13 @@ class TrainerPlugin:
     def run(self, step: int, end_of_epoch: bool):
         """
         Whether or not to run this plugin on the current step.
+
+        Args:
+            step (int): The current step.
+            end_of_epoch (bool): Whether it is the end of an epoch.
+
+        Returns:
+            bool: Whether to run the plugin.
         """
         # By default we always run for epoch ends.
         if end_of_epoch:
@@ -53,12 +63,10 @@ class TrainerPlugin:
         parameters for validation, checkpointing, logging, etc.
 
         Args:
-        model: The model being trained.
-        step: The step in training, re-starting from zero each epoch. None at
-                 epoch end.
-        metrics: a dictionary of metrics that might be useful for
-                logging/reporting. E.g. 'loss'. Specific metrics subject
-                to change.
+            epoch (int): The current epoch.
+            step (int): The step in training, re-starting from zero each epoch. None at epoch end.
+            metrics (Dict): A dictionary of metrics that might be useful for logging/reporting. E.g. 'loss'.
+            end_of_epoch (bool): Whether it is the end of an epoch.
         """
         pass
 
@@ -66,6 +74,14 @@ class TrainerPlugin:
 class InferenceValidator(TrainerPlugin):
     """
     A training plugin to print the results of running inference on a given prompt.
+
+    Args:
+        model (nn.Module): The model to use for inference.
+        prompt_tokens (List[str]): The prompt tokens to use for inference.
+        tokenizer (BaseTokenizer): The tokenizer to use.
+        device (Union[torch.device, str]): The device to use for inference.
+        steps (Optional[int]): The number of steps between runs.
+        eos_token (Optional[str]): The end-of-sequence token.
     """
 
     def __init__(
@@ -91,6 +107,16 @@ class InferenceValidator(TrainerPlugin):
     def step(
         self, epoch: int, step: int, metrics: Dict = {}, end_of_epoch: bool = False
     ):
+        """
+        This method is called on every step of training, or with step=None
+        at the end of each epoch. It runs inference on a given prompt and prints the result.
+
+        Args:
+            epoch (int): The current epoch.
+            step (int): The step in training, re-starting from zero each epoch. None at epoch end.
+            metrics (Dict): A dictionary of metrics that might be useful for logging/reporting.
+            end_of_epoch (bool): Whether it is the end of an epoch.
+        """
         if not self.run(step, end_of_epoch):
             return
         training = self.model.training
@@ -115,6 +141,14 @@ class MetricReporter(TrainerPlugin):
     A training plugin to periodically log metrics. Logs every `seconds`
     seconds by calling `writer` with the log message. A custom writer
     should accept `*args` similar to `print`.
+
+    Args:
+        seconds (int): The number of seconds between logs.
+        group (Optional[dist.ProcessGroup]): The process group to use for distributed training.
+        prev_step (int): The previous step.
+        cumulative_tokens (int): The cumulative number of tokens seen.
+        device (str): The device to use for metrics.
+        writer: The writer to use for logging.
     """
 
     # TODO: add optional validation dataloader and validation loss.
@@ -144,6 +178,16 @@ class MetricReporter(TrainerPlugin):
     def step(
         self, epoch: int, step: int, metrics: Dict = {}, end_of_epoch: bool = False
     ):
+        """
+        This method is called on every step of training, or with step=None
+        at the end of each epoch. It logs metrics to the writer.
+
+        Args:
+            epoch (int): The current epoch.
+            step (int): The step in training, re-starting from zero each epoch. None at epoch end.
+            metrics (Dict): A dictionary of metrics that might be useful for logging/reporting.
+            end_of_epoch (bool): Whether it is the end of an epoch.
+        """
         if "batch_size" in metrics and "input_length" in metrics:
             self.tokens_seen += metrics["batch_size"] * metrics["input_length"]
         if "loss" in metrics:
@@ -213,13 +257,16 @@ class Checkpointer(TrainerPlugin):
     TODO: This will require changes to handle distributed checkpoints.
 
     Args:
-
-    group: The group to checkpoint. i.e. if using hsdp, you would want to pass
-            a subgroup for a single hsdp shard group.
-    name: included in the file path to differentiate this particular checkpoint.
-    save_dir: the base directory into which to save checkpoints.
-    dataset: if set, save the state_dict of this dataset.
-    steps: save a checkpoint every `steps` steps.
+        model (nn.Module): The model to checkpoint.
+        optimizer (Optimizer): The optimizer to checkpoint.
+        dataset (Optional[SavableDataset]): The dataset to checkpoint.
+        save_dir (Union[str, Path]): The base directory into which to save checkpoints.
+        steps (Optional[int]): Save a checkpoint every `steps` steps.
+        cumulative_tokens (int): The cumulative number of tokens seen.
+        prev_step (int): The previous step.
+        name (Optional[str]): Included in the file path to differentiate this particular checkpoint.
+        group (Optional[dist.ProcessGroup]): The group to checkpoint. i.e. if using hsdp, you would want to pass a subgroup for a single hsdp shard group.
+        device (str): The device to use for metrics.
     """
 
     def __init__(
@@ -248,11 +295,19 @@ class Checkpointer(TrainerPlugin):
         self.prev_step = prev_step
         self.device = device
 
-    # TODO: this probably also needs to accept a dataset since we want to
-    # support checkpointable datasets.
     def step(
         self, epoch: int, step: int, metrics: Dict = {}, end_of_epoch: bool = False
     ):
+        """
+        This method is called on every step of training, or with step=None
+        at the end of each epoch. It writes a checkpoint to disk.
+
+        Args:
+            epoch (int): The current epoch.
+            step (int): The step in training, re-starting from zero each epoch. None at epoch end.
+            metrics (Dict): A dictionary of metrics that might be useful for logging/reporting.
+            end_of_epoch (bool): Whether it is the end of an epoch.
+        """
         if not self.run(step, end_of_epoch):
             return
 
