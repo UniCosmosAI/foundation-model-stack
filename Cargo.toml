@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "ai-core",
+    "bootloader",
+    "kernel",
+    "web3-os",
+]
+
+[profile.release]
+panic = "abort"
